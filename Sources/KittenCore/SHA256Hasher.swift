@@ -14,7 +14,13 @@ public struct SHA256Hasher {
 
     public init() {}
 
-    public mutating func update(_ data: Data) { inner.update(data) }
+    public mutating func update(_ data: Data) {
+        #if canImport(CryptoKit)
+        inner.update(data: data)
+        #else
+        inner.update(data)
+        #endif
+    }
 
     public mutating func finalizeHex() -> String {
         #if canImport(CryptoKit)
