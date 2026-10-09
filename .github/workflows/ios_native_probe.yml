@@ -1,4 +1,4 @@
-name: iOS native probe (experimental)
+name: iOS native probe (experimental, upstream TQ2_1 only)
 
 # Feasibility spike only: does the custom TQ2_1 llama.cpp fork cross-compile for iOS arm64?
 # Failure here does not block the main app build (separate workflow); the job itself reports its true status.

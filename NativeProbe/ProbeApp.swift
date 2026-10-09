@@ -9,7 +9,7 @@ struct NativeProbeApp: App {
 struct ProbeView: View {
     @State private var importing = false
     @State private var fileName = "(none)"
-    @State private var report = "Pick a real KittenTTS 2 TQ2_1 GGUF (e.g. model-tq2_1.gguf)."
+    @State private var report = "Pick KittenML's TQ2_1 GGUF (model-tq2_1.gguf). Not the audio.cpp single-file package."
     @State private var url: URL?
     @State private var busy = false
 
@@ -17,7 +17,7 @@ struct ProbeView: View {
         NavigationView {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Native runtime load probe. This is NOT text-to-speech: the decoder.pt and text normalizer are not linked, no audio is generated, and there is no Generate action.")
+                    Text("ONLY for KittenML's upstream model-tq2_1.gguf (custom llama.cpp). For kitten-tts2-native-q8-multilingual.gguf (dignome/kitten_tts2, architecture audiocpp) use the separate \"Kitten audio.cpp\" test app. Native runtime load probe. This is NOT text-to-speech: the decoder.pt and text normalizer are not linked, no audio is generated, and there is no Generate action.")
                         .font(.footnote).foregroundColor(.orange)
                     Text("File: \(fileName)")
                     Button("Choose GGUF…") { importing = true }

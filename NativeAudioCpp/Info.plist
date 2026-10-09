@@ -3,15 +3,19 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDevelopmentRegion</key><string>en</string>
-	<key>CFBundleExecutable</key><string>KittenTTS2NativeProbe</string>
-	<key>CFBundleIdentifier</key><string>com.cookie9843.KittenTTS2NativeProbe</string>
+	<key>CFBundleExecutable</key><string>KittenTTS2AudioCppTest</string>
+	<key>CFBundleIdentifier</key><string>com.cookie9843.KittenTTS2AudioCppTest</string>
 	<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-	<key>CFBundleName</key><string>TQ2_1 Probe (KittenML only)</string>
+	<key>CFBundleName</key><string>Kitten audio.cpp</string>
 	<key>CFBundlePackageType</key><string>APPL</string>
 	<key>CFBundleShortVersionString</key><string>0.1</string>
+	<key>KTAudioCppRevision</key><string>unknown</string>
+	<key>CFBundleDisplayName</key><string>Kitten audio.cpp</string>
 	<key>CFBundleVersion</key><string>1</string>
 	<key>MinimumOSVersion</key><string>16.4</string>
 	<key>UIDeviceFamily</key><array><integer>1</integer><integer>2</integer></array>
+	<key>UIFileSharingEnabled</key><true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key><true/>
 	<key>UILaunchScreen</key><dict/>
 	<key>UIRequiredDeviceCapabilities</key><array><string>arm64</string></array>
 	<key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>

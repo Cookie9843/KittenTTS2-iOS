@@ -23,6 +23,28 @@ KittenTTS 2 inference requires upstream's `kitten-tts-2-cpp`: a custom llama.cpp
 
 See [docs/KITTENTTS2_IOS_FEASIBILITY.md](docs/KITTENTTS2_IOS_FEASIBILITY.md): a C bridge stub, bundle verifier, memory heuristic and an experimental CI probe for the iOS build of the TQ2_1 llama.cpp fork. **This is a feasibility spike, not production-ready; KittenTTS 2 audio has not been generated on iOS.**
 
+## audio.cpp KittenTTS 2 single-GGUF test IPA (`dignome/kitten_tts2`)
+
+The community file `kitten-tts2-native-q8-multilingual.gguf` (3,282,123,776 bytes, SHA-256 `e97920ca5053f9fcd4de638dcd8114ed2510d4291a93257473a8843c3ff349ad`) is **not** KittenML's TQ2_1 file: its architecture is `audiocpp`, it has zero TQ2_1 tensors, and it embeds the model, tokenizer/config, decoder, speaker encoders and 48 prepared voices. It runs on [audio.cpp's](https://github.com/dignome/audio.cpp-custom/tree/kittentts2) native C++/GGML `kitten_tts2` family (no Python/LibTorch/ONNX). Upstream validates CPU on Windows, **not iOS**.
+
+`NativeAudioCpp/` is a separate test app (workflow *iOS audio.cpp KittenTTS 2 test IPA*, artifact `KittenTTS2AudioCppTest-unsigned-ipa`). It links the real audio.cpp runtime (pinned `ad1473cd460177480e8a0dc625bd46f76ea49aae`, `AUDIOCPP_MODELS=kitten_tts2`, CPU only, ARMv8.2+dotprod+fp16) through a small C bridge over `audiocpp.h` (`kt_load` / `kt_synthesize`). Evidence levels, kept separate on purpose:
+
+| Stage | Where it is shown |
+| --- | --- |
+| Metadata validation (arch `audiocpp`, `audiocpp.model_spec.family=kitten_tts2`, Q8 mixed tensors, embedded assets, size, optional SHA-256) | `swift test` fixtures + the app's diagnostics |
+| Native build/link | CI logs (`RESULT:` lines are required) |
+| Model load on iOS | only if the app's diagnostics say `NATIVE MODEL LOAD: OK` on your device |
+| Audio generation | only if they say `AUDIO GENERATED: YES` (non-silent mono 24 kHz PCM from audio.cpp, exportable as WAV) |
+
+**Try it (LiveContainer or any sideloader):**
+1. Keep the single file `kitten-tts2-native-q8-multilingual.gguf` somewhere in Files (the app never downloads or bundles it).
+2. Download the CI artifact, unzip, and install/sign `KittenTTS2AudioCppTest-unsigned.ipa` (unsigned IPAs may be constrained by LiveContainer; that is not tested here).
+3. Open the app, *Choose GGUF…*, pick the file. Check the validation and resource lines (optional: SHA-256).
+4. Tap *Load* (memory-maps 3.28 GB; it may be slow or iOS may terminate the app: this is empirical and the app records the stage so the next launch explains it), then *Synthesize*.
+5. Tap *Copy* (or *Export*) in the Diagnostics box and send the text. No Xcode or device logs are needed.
+
+The native call cannot be interrupted: *Cancel* waits for it to finish and discards the result. Models stay user-provided and out of CI; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the Stellon Labs Community License / NOTICE and audio.cpp licensing. The older `NativeProbe/` app is only for KittenML's upstream `model-tq2_1.gguf`.
+
 ## Import steps
 
 1. Open the **Models** tab and choose the family.
