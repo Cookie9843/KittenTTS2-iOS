@@ -1,0 +1,23 @@
+diff --git a/external/ggml/src/ggml.c b/external/ggml/src/ggml.c
+index 4b720f1..aaf723d 100644
+--- a/external/ggml/src/ggml.c
++++ b/external/ggml/src/ggml.c
+@@ -1672,9 +1672,17 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
+ 
+     const size_t mem_size = params.mem_buffer ? params.mem_size : GGML_PAD(params.mem_size, GGML_MEM_ALIGN);
+ 
++    void * const mem_buffer = params.mem_buffer ? params.mem_buffer : ggml_aligned_malloc(mem_size);
++    if (mem_buffer == NULL) {
++        // Report failure to the caller instead of aborting; every caller in audio.cpp already checks for NULL.
++        GGML_LOG_ERROR("%s: failed to allocate the %zu byte context arena\n", __func__, mem_size);
++        GGML_FREE(ctx);
++        return NULL;
++    }
++
+     *ctx = (struct ggml_context) {
+         /*.mem_size           =*/ mem_size,
+-        /*.mem_buffer         =*/ params.mem_buffer ? params.mem_buffer : ggml_aligned_malloc(mem_size),
++        /*.mem_buffer         =*/ mem_buffer,
+         /*.mem_buffer_owned   =*/ params.mem_buffer ? false : true,
+         /*.no_alloc           =*/ params.no_alloc,
+         /*.n_objects          =*/ 0,
