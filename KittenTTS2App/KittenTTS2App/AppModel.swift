@@ -13,7 +13,8 @@ final class AppModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
         case generating
     }
 
-    @Published var family: ModelFamily = .legacy08
+    /// Files imported through the Models tab belong to the original 0.8 family (KittenTTS 2 is downloaded, not imported).
+    let family: ModelFamily = .legacy08
     @Published var legacyVariant: LegacyVariant = .nano
     @Published var voice: KittenVoice = .bella
     @Published var speed: Float = 1.0
@@ -23,6 +24,7 @@ final class AppModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
     @Published var messageIsError = false
     @Published var history: [GenerationRecord] = []
     @Published var playingID: UUID?
+    @Published var latest: GenerationRecord?
     @Published var installRevision = 0
 
     private var store: HistoryStore?
@@ -55,24 +57,7 @@ final class AppModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
             && FileManager.default.fileExists(atPath: dir.appendingPathComponent(variant.voicesFileName).path)
     }
 
-    func kitten2Files() -> [String] {
-        _ = installRevision
-        let dir = modelRoot.appendingPathComponent("kitten2")
-        return ((try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []).sorted()
-    }
-
-    /// Metadata-only verification of the installed KittenTTS 2 bundle plus the (unlinked) native runtime status.
-    func kitten2Report() -> String {
-        _ = installRevision
-        let dir = modelRoot.appendingPathComponent("kitten2")
-        let report = BundleVerifier.verify(directory: dir)
-        let gate = GenerationGate.evaluate(report: report, runtime: NativeKittenRuntime())
-        let budget = DeviceBudget.assess(modelBytes: report.modelBytes, physicalMemory: ProcessInfo.processInfo.physicalMemory)
-        return report.summary + "\nMemory estimate: " + budget.text
-            + "\nGeneration: " + (gate.enabled ? "enabled" : "disabled – " + gate.reasons.joined(separator: "; "))
-    }
-
-    var canGenerate: Bool { family == .legacy08 && isInstalled(legacyVariant) && !busy }
+    var canGenerate: Bool { isInstalled(legacyVariant) && !busy }
 
     func show(_ text: String, error: Bool = false) {
         message = text
@@ -135,7 +120,7 @@ final class AppModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
     // MARK: Download (legacy only, explicit user action)
 
     func downloadLegacy() {
-        guard !busy, family == .legacy08 else { return }
+        guard !busy else { return }
         let variant = legacyVariant
         phase = .downloading(0)
         show("Downloading \(variant.huggingFaceRepo) from Hugging Face…")
@@ -171,10 +156,6 @@ final class AppModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
     func generate() {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { show("Enter some text first.", error: true); return }
-        guard family == .legacy08 else {
-            show(ModelFamily.kitten2.runtimeBlocker ?? "Unavailable.", error: true)
-            return
-        }
         guard isInstalled(legacyVariant) else {
             show("Import or download a \(legacyVariant.displayName) model first (Models tab).", error: true)
             return
@@ -192,6 +173,7 @@ final class AppModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
                 let record = try store?.add(samples: result.samples, sampleRate: result.sampleRate, text: trimmed, family: .legacy08,
                                             modelName: variant.displayName, voice: selectedVoice.displayName, speed: selectedSpeed)
                 history = store?.records ?? []
+                latest = record
                 phase = .idle
                 show("Done: \(String(format: "%.1f", result.duration)) s of audio.")
                 if let record { play(record) }
@@ -203,6 +185,22 @@ final class AppModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
     }
 
     // MARK: Playback / history
+
+    /// Saves generated PCM as a WAV in the history and starts playback. Used by the KittenTTS 2 path.
+    @discardableResult
+    func addRecord(samples: [Float], sampleRate: Int, text: String, family: ModelFamily, modelName: String, voice: String, speed: Float) -> GenerationRecord? {
+        do {
+            guard let record = try store?.add(samples: samples, sampleRate: sampleRate, text: text, family: family,
+                                              modelName: modelName, voice: voice, speed: speed) else { return nil }
+            history = store?.records ?? []
+            latest = record
+            play(record)
+            return record
+        } catch {
+            show("Could not save the audio: \(error.localizedDescription)", error: true)
+            return nil
+        }
+    }
 
     func audioURL(_ record: GenerationRecord) -> URL? { store?.audioURL(for: record) }
 
@@ -234,12 +232,14 @@ final class AppModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
         if playingID == record.id { stopPlayback() }
         try? store?.delete(record)
         history = store?.records ?? []
+        if latest?.id == record.id { latest = nil }
     }
 
     func clearHistory() {
         stopPlayback()
         try? store?.clear()
         history = store?.records ?? []
+        latest = nil
     }
 }
 
