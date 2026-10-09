@@ -25,7 +25,7 @@ xcodebuild \
   -derivedDataPath "$OUT/DerivedData" \
   CODE_SIGNING_ALLOWED=NO \
   GCC_PREPROCESSOR_DEFINITIONS="KT_NATIVE_LINKED=1" \
-  HEADER_SEARCH_PATHS="\$(inherited) $ROOT/NativeAudioCpp $SRC/include $SRC/external/ggml/include" \
+  AUDIOCPP_SOURCE_ROOT="$SRC" \
   OTHER_LDFLAGS="$LDFLAGS" \
   build
 
