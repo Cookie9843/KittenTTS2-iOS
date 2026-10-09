@@ -119,6 +119,13 @@ jobs:
           name: KittenTTS-unsigned-ipa
           path: ${{ runner.temp }}/app-ipa/KittenTTS-unsigned.ipa
           if-no-files-found: error
+      - name: Upload full-app link diagnostics (build log, build settings, link map, nm/otool)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-app-link-diagnostics
+          path: ${{ runner.temp }}/app-ipa/diagnostics
+          if-no-files-found: warn
       - name: Summary
         if: always()
         run: |
