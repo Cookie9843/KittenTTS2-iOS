@@ -15,20 +15,42 @@ permissions:
 jobs:
   llama-fork-ios-arm64:
     runs-on: macos-latest
-    timeout-minutes: 60
+    timeout-minutes: 180
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
+      - name: Install ninja and ccache
+        run: brew install ninja ccache
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/ccache
+          key: ccache-ios-llama-${{ runner.os }}-${{ github.sha }}
+          restore-keys: ccache-ios-llama-${{ runner.os }}-
       - name: Build custom llama.cpp fork for iOS arm64
+        timeout-minutes: 165
+        env:
+          WORK: ${{ runner.temp }}/probe
+          LOG_DIR: ${{ runner.temp }}/probe-logs
+          CCACHE_MAXSIZE: 1G
         run: |
           set -o pipefail
-          ./scripts/probe_ios_native.sh 2>&1 | tee "$RUNNER_TEMP/probe.log"
+          mkdir -p "$LOG_DIR"
+          ./scripts/probe_ios_native.sh 2>&1 | tee "$LOG_DIR/probe.log"
       - name: Summary
         if: always()
         run: |
           {
             echo "### iOS native probe"
             echo '```'
-            tail -n 40 "$RUNNER_TEMP/probe.log" || true
+            tail -n 40 "$RUNNER_TEMP/probe-logs/probe.log" || true
             echo '```'
+            echo "Probe only: verifies custom llama.cpp static libs. Does not solve the LibTorch decoder/normalizer blocker and produces no KittenTTS audio."
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-native-probe-logs
+          path: ${{ runner.temp }}/probe-logs
+          if-no-files-found: warn
