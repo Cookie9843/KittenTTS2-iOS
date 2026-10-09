@@ -1,0 +1,20 @@
+diff --git a/include/engine/framework/core/backend_weight_store.h b/include/engine/framework/core/backend_weight_store.h
+index 6e09b46..452d3a5 100644
+--- a/include/engine/framework/core/backend_weight_store.h
++++ b/include/engine/framework/core/backend_weight_store.h
+@@ -38,6 +38,15 @@ public:
+         if (context_bytes == 0) {
+             throw std::runtime_error(name_ + " context bytes must be non-zero");
+         }
++        // The context is created with no_alloc=true: it only holds ggml_tensor headers (~400 bytes each);
++        // tensor data lives in the backend buffer made by upload(). ggml_init() still malloc()s mem_size
++        // up front and aborts the process if that fails, so callers' multi-GiB budgets (2 GiB for the S3
++        // flow decoder) would crash small/constrained devices. Clamp to a generous header-only bound;
++        // ggml_new_tensor() then returns null (-> runtime_error) instead of aborting if it is ever exceeded.
++        constexpr size_t kMaxMetadataContextBytes = 64ull * 1024ull * 1024ull;
++        if (context_bytes > kMaxMetadataContextBytes) {
++            context_bytes = kMaxMetadataContextBytes;
++        }
+         ggml_init_params params{context_bytes, nullptr, true};
+         ctx_.reset(ggml_init(params));
+         if (ctx_ == nullptr) {

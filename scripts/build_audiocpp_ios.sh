@@ -46,6 +46,12 @@ fi
 git -C "$SRC" fetch --quiet --depth 1 origin "$AUDIOCPP_REF"
 git -C "$SRC" checkout --quiet --force FETCH_HEAD
 test "$(git -C "$SRC" rev-parse HEAD)" = "$AUDIOCPP_REF" || { echo "pinned revision mismatch" >&2; exit 1; }
+# Bound the ggml metadata arenas (root cause of the 2 GiB ggml_init abort); see scripts/patches/.
+PATCH="$ROOT/scripts/patches/audiocpp-weight-store-metadata-arena.patch"
+git -C "$SRC" apply --check "$PATCH" || { echo "patch does not apply to the pinned revision" >&2; exit 1; }
+git -C "$SRC" apply "$PATCH"
+grep -q kMaxMetadataContextBytes "$SRC/include/engine/framework/core/backend_weight_store.h" \
+  || { echo "weight-store arena patch missing" >&2; exit 1; }
 echo "== source =="; git -C "$SRC" log -1 --format='%H %s'
 grep -n "kitten_tts2" "$SRC/CMakeLists.txt" | head -3
 

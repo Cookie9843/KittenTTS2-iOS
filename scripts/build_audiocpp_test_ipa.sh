@@ -19,11 +19,11 @@ while read -r lib; do LIBS+=("$lib"); done < "$WORK/libs.txt"
 
 rm -rf "$OUT"; mkdir -p "$APP" "$OUT/obj"
 xcrun --sdk iphoneos clang -c -std=c11 -O2 -arch arm64 -isysroot "$SDK" -miphoneos-version-min=$MINOS \
-  -I"$SRC/include" -I"$ROOT/NativeAudioCpp" "$ROOT/NativeAudioCpp/kt_audiocpp_bridge.c" -o "$OUT/obj/bridge.o"
+  -I"$SRC/include" -I"$SRC/external/ggml/include" -I"$ROOT/NativeAudioCpp" "$ROOT/NativeAudioCpp/kt_audiocpp_bridge.c" -o "$OUT/obj/bridge.o"
 
 xcrun --sdk iphoneos swiftc -parse-as-library -O -target arm64-apple-ios$MINOS -sdk "$SDK" \
   -import-objc-header "$ROOT/NativeAudioCpp/bridging.h" -I"$ROOT/NativeAudioCpp" \
-  "$ROOT/NativeAudioCpp/AudioCppTestApp.swift" "$ROOT/Sources/KittenCore/AudioCppGGUF.swift" "$ROOT/Sources/KittenCore/WAVEncoder.swift" \
+  "$ROOT/NativeAudioCpp/AudioCppTestApp.swift" "$ROOT/Sources/KittenCore/AudioCppGGUF.swift" "$ROOT/Sources/KittenCore/AudioCppDiagnostics.swift" "$ROOT/Sources/KittenCore/WAVEncoder.swift" \
   "$OUT/obj/bridge.o" "$WORK/capi/audiocpp.o" "${LIBS[@]}" \
   -Xlinker -dead_strip -Xlinker -lc++ -framework Accelerate -framework SwiftUI -framework UniformTypeIdentifiers -framework AVFoundation \
   -o "$APP/$APPNAME"

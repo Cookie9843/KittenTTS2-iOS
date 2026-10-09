@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "audiocpp.h"
+#include "ggml.h"
 
 struct kt_engine {
     audiocpp_registry *registry;
@@ -31,10 +32,17 @@ uint64_t kt_available_memory(void) { return (uint64_t)os_proc_available_memory()
 
 int kt_redirect_stderr(const char *path) {
     if (!path) return 1;
-    if (!freopen(path, "a", stderr)) return 2;
+    if (!freopen(path, "w", stderr)) return 2;
     setvbuf(stderr, NULL, _IOLBF, 0);
     return 0;
 }
+
+static void abort_hook(const char *message) {
+    fprintf(stderr, "KT_NATIVE_ABORT: %s\n", message ? message : "(no message)");
+    fflush(stderr);
+}
+
+void kt_install_abort_hook(void) { ggml_set_abort_callback(abort_hook); }
 
 void kt_unload(kt_engine *e) {
     if (!e) return;

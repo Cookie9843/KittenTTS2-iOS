@@ -23,8 +23,12 @@ int kt_runtime_info(char *out, size_t cap);
 /* Bytes the app may still allocate before iOS terminates it (os_proc_available_memory); 0 if unknown. */
 uint64_t kt_available_memory(void);
 
-/* Appends native stderr (ggml/audio.cpp logging) to `path` so the UI can show it. */
+/* Truncates `path` and sends native stderr (ggml/audio.cpp logging) there so the UI can show it. */
 int kt_redirect_stderr(const char *path);
+
+/* A GGML_ASSERT/ggml_abort ends in abort() (SIGABRT): Swift/C++ error handling cannot intercept it. This hook
+ * only records the assertion text on stderr (prefix KT_NATIVE_ABORT:) before the process dies. */
+void kt_install_abort_hook(void);
 
 /* Loads the model at `path` (family hint kitten_tts2) and creates a CPU TTS session. */
 int kt_load(const char *path, int threads, kt_engine **out, char *describe, size_t describe_cap,

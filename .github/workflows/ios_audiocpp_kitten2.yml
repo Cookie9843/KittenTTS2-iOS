@@ -10,6 +10,8 @@ on:
     paths:
       - NativeAudioCpp/**
       - Sources/KittenCore/AudioCppGGUF.swift
+      - Sources/KittenCore/AudioCppDiagnostics.swift
+      - scripts/patches/**
       - Sources/KittenCore/WAVEncoder.swift
       - scripts/build_audiocpp_ios.sh
       - scripts/build_audiocpp_test_ipa.sh
@@ -24,6 +26,7 @@ on:
       - scripts/build_audiocpp_ios.sh
       - scripts/build_audiocpp_test_ipa.sh
       - scripts/cmake/**
+      - scripts/patches/**
       - .github/workflows/ios_audiocpp_kitten2.yml
 
 permissions:
