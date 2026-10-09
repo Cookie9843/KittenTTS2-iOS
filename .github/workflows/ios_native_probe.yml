@@ -40,7 +40,8 @@ jobs:
           mkdir -p "$LOG_DIR"
           ./scripts/probe_ios_native.sh 2>&1 | tee "$LOG_DIR/probe.log"
       - name: Require final verification line
-        run: grep -q '^RESULT: llama fork (TQ2_1) static libs built for iOS arm64' "$RUNNER_TEMP/probe-logs/probe.log"
+        run: |
+          grep -q '^RESULT: llama fork (TQ2_1) static libs built for iOS arm64' "$RUNNER_TEMP/probe-logs/probe.log"
       - name: Build unsigned native probe IPA (links the fork-built libs)
         env:
           WORK: ${{ runner.temp }}/probe
