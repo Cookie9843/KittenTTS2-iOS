@@ -32,7 +32,7 @@ The app uses the official KittenML Swift SDK, [`KittenML/KittenTTS-swift`](https
 
 - First use needs internet: the model (unless imported) **and** the phonemizer data files are downloaded once, then everything is cached and works offline.
 - Importing a model still downloads the phonemizer data on first load.
-- The SDK has no cancellation API: *Cancel* stops waiting and discards the result, but the sentence currently being synthesized finishes in the background. Progress is reported per generated sentence (the SDK does not expose a total).
+- SDK 0.1.0 has no streaming, cancellation or explicit model-file API. The app splits text into sentences and synthesizes them one at a time, so *Cancel* takes effect after the sentence being synthesized (its output is discarded). Imported models are placed in the SDK's expected storage layout (`Imported/<model id>/`) and loaded via `storageDirectory`.
 - Only the SDK's eight known voice IDs are usable; other embeddings in a custom `voices.npz` are ignored.
 - The CI IPA is **unsigned**; installing it on a device requires re-signing (e.g. with your own Apple Developer account).
 - This code has been unit tested for the logic layer only (see below); the UI/inference path needs to be exercised on a device or simulator. Larger models (mini) need more memory and time.

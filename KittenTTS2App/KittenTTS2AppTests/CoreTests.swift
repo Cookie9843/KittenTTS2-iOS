@@ -185,3 +185,19 @@ final class ModelVariantTests: XCTestCase {
         XCTAssertEqual(ModelVariant.nanoInt8.onnxFileName, "kitten_tts_nano_v0_8.onnx")
     }
 }
+
+final class SentenceSplitTests: XCTestCase {
+    func testSplitsOnTerminators() {
+        XCTAssertEqual(TextInput.sentences(from: "Hello there. How are you?! Fine\nOk"),
+                       ["Hello there.", "How are you?!", "Fine", "Ok"])
+    }
+
+    func testKeepsDecimalsAndTrailingText() {
+        XCTAssertEqual(TextInput.sentences(from: "Pi is 3.14 roughly. Yes"), ["Pi is 3.14 roughly.", "Yes"])
+    }
+
+    func testSingleSentenceAndPunctuationOnly() {
+        XCTAssertEqual(TextInput.sentences(from: "No terminator"), ["No terminator"])
+        XCTAssertEqual(TextInput.sentences(from: "Wait. ..."), ["Wait...."])
+    }
+}

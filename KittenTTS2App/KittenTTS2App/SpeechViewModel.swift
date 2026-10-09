@@ -80,8 +80,12 @@ final class SpeechViewModel: ObservableObject {
             .appendingPathComponent("KittenTTS2App", isDirectory: true)
     }
 
-    private func importedDirectory(for variant: ModelVariant) -> URL {
+    private var importedRootDirectory: URL {
         Self.supportDirectory.appendingPathComponent("Imported", isDirectory: true)
+    }
+
+    private func importedDirectory(for variant: ModelVariant) -> URL {
+        importedRootDirectory
             .appendingPathComponent(variant.rawValue, isDirectory: true)
     }
 
@@ -151,7 +155,9 @@ final class SpeechViewModel: ObservableObject {
                 }
                 var config = KittenTTSConfig(model: kittenModel)
                 if let files, files.imported {
-                    config.modelFiles = KittenTTSModelFiles(onnxURL: files.onnx, voicesURL: files.voices)
+                    // SDK 0.1.0 has no explicit model-file option. It looks for the files in
+                    // `<storageDirectory>/<model id>/`, which is exactly where imports are stored.
+                    config.storageDirectory = importedRootDirectory
                 }
                 let loaded = try await KittenTTS(config) { [weak self] progress in
                     Task { @MainActor in
@@ -249,14 +255,16 @@ final class SpeechViewModel: ObservableObject {
         let sampleRate = KittenTTSConfig.outputSampleRate
         let modelName = variant.displayName
         let speedUsed = speed
+        let sentences = TextInput.sentences(from: text)
 
         generationTask = Task {
             defer { if generationToken == token { generationTask = nil } }
             do {
                 var samples: [Float] = []
                 var done = 0
-                let stream = await engine.generateStreaming(text, voice: kittenVoice, speed: speedValue)
-                for try await part in stream {
+                for sentence in sentences {
+                    try Task.checkCancellation()
+                    let part = try await engine.generate(sentence, voice: kittenVoice, speed: speedValue)
                     try Task.checkCancellation()
                     if !samples.isEmpty { samples += [Float](repeating: 0, count: sampleRate / 8) }
                     samples += part.samples
