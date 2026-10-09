@@ -1,0 +1,29 @@
+name: Build unsigned IPA
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Build unsigned IPA
+        run: ./scripts/build_unsigned_ipa.sh
+
+      - name: Create release and upload IPA
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            build/KittenTTS2App-unsigned.ipa \
+            --title "KittenTTS2-iOS $GITHUB_REF_NAME" \
+            --notes "Unsigned iOS IPA build for $GITHUB_REF_NAME." \
+            --verify-tag

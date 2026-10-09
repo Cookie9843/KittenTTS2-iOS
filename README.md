@@ -14,7 +14,7 @@ This repository is a minimal iOS app scaffold for porting KittenTTS 2 to iPhone/
 ## Repository contents
 
 - `KittenTTS2App/` — the iOS application
-- `.github/workflows/build_unsigned_ipa.yml` — workflow that builds an unsigned IPA
+- `.github/workflows/build_unsigned_ipa.yml` — workflow that builds an unsigned IPA and attaches it to a GitHub release
 - `scripts/build_unsigned_ipa.sh` — local macOS build script
 
 ## Local development
@@ -28,6 +28,10 @@ This repository is a minimal iOS app scaffold for porting KittenTTS 2 to iPhone/
 ## Note on signing
 
 This project is designed to build without code signing locally or in CI when using the `CODE_SIGNING_ALLOWED=NO` path. An unsigned IPA is useful for testing packaging workflows, but App Store or device installation still requires a valid Apple Developer certificate and provisioning profile.
+
+## GitHub releases
+
+Push a version tag such as `v1.0.0` to build the unsigned IPA on a macOS GitHub Actions runner and create a GitHub release with `KittenTTS2App-unsigned.ipa` attached. The workflow requires the repository's default `GITHUB_TOKEN` to have permission to create releases.
 
 ## License
 
