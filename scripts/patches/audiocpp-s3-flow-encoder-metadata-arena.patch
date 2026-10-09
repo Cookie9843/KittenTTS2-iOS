@@ -1,0 +1,66 @@
+diff --git a/src/models/chatterbox/s3gen_flow.cpp b/src/models/chatterbox/s3gen_flow.cpp
+index e809129..9193f9b 100644
+--- a/src/models/chatterbox/s3gen_flow.cpp
++++ b/src/models/chatterbox/s3gen_flow.cpp
+@@ -24,6 +24,16 @@
+ namespace engine::models::chatterbox {
+ namespace {
+ 
++// The flow-encoder graph contexts below are created with no_alloc = true: they only hold ggml_tensor headers and
++// one cgraph (tensor data is placed by ggml_gallocr). ggml_init() still reserves mem_size up front, and one
++// encoder runner holds ten layers x (attention + feed-forward) of them at once. Every tensor reachable from a
++// graph is a node or a leaf, and ggml_build_forward_expand() caps both at `graph_nodes`, so
++// cgraph + 4 * graph_nodes tensor headers (2x headroom over nodes + leafs) bounds the arena.
++size_t metadata_arena_bytes(size_t requested_bytes, size_t graph_nodes) {
++    const size_t bound = ggml_graph_overhead_custom(graph_nodes, false) + 4 * graph_nodes * ggml_tensor_overhead();
++    return std::min(requested_bytes, bound);
++}
++
+ S3FlowEncoderWeights::LayerNormWeights load_flow_layer_norm(
+     engine::core::BackendWeightStore & store,
+     const engine::assets::TensorSource & source,
+@@ -993,7 +1003,7 @@ private:
+             const engine::core::BackendConfig &)
+             : execution_context_(weights.execution_context) {
+             ggml_init_params params = {};
+-            params.mem_size = 192ull * 1024ull * 1024ull;
++            params.mem_size = metadata_arena_bytes(192ull * 1024ull * 1024ull, 16384);
+             params.mem_buffer = nullptr;
+             params.no_alloc = true;
+             ggml_ = ggml_init(params);
+@@ -1100,7 +1110,7 @@ private:
+                 const engine::core::BackendConfig &)
+                 : execution_context_(&execution_context) {
+                 ggml_init_params params = {};
+-                params.mem_size = 192ull * 1024ull * 1024ull;
++                params.mem_size = metadata_arena_bytes(192ull * 1024ull * 1024ull, 24576);
+                 params.mem_buffer = nullptr;
+                 params.no_alloc = true;
+                 ggml_ = ggml_init(params);
+@@ -1187,7 +1197,7 @@ private:
+                 const engine::core::BackendConfig &)
+                 : execution_context_(&execution_context) {
+                 ggml_init_params params = {};
+-                params.mem_size = 128ull * 1024ull * 1024ull;
++                params.mem_size = metadata_arena_bytes(128ull * 1024ull * 1024ull, 16384);
+                 params.mem_buffer = nullptr;
+                 params.no_alloc = true;
+                 ggml_ = ggml_init(params);
+@@ -1257,7 +1267,7 @@ private:
+             const engine::core::BackendConfig &)
+             : execution_context_(weights.execution_context) {
+             ggml_init_params params = {};
+-            params.mem_size = 192ull * 1024ull * 1024ull;
++            params.mem_size = metadata_arena_bytes(192ull * 1024ull * 1024ull, 16384);
+             params.mem_buffer = nullptr;
+             params.no_alloc = true;
+             ggml_ = ggml_init(params);
+@@ -1333,7 +1343,7 @@ private:
+             const engine::core::BackendConfig &)
+             : execution_context_(&execution_context) {
+             ggml_init_params params = {};
+-            params.mem_size = 64ull * 1024ull * 1024ull;
++            params.mem_size = metadata_arena_bytes(64ull * 1024ull * 1024ull, 4096);
+             params.mem_buffer = nullptr;
+             params.no_alloc = true;
+             ggml_ = ggml_init(params);

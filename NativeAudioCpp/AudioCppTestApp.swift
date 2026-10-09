@@ -21,6 +21,8 @@ enum Step: String { case idle = "not attempted", running = "running", ok = "OK",
 final class TestModel: ObservableObject {
     static let voices = ["Bruno", "Bella", "Luna", "Jasper", "Kiki", "Leo", "Rosie", "Hugo", "German", "French", "Spanish", "Italian", "Portuguese", "Russian", "Chinese", "Arabic", "Hindi"]
     static let breadcrumbKey = "kt.lastStage"
+    static let crashNoteKey = "kt.previousRunNote"
+    static let crashLogKey = "kt.previousRunLog"
 
     @Published var fileName = "(none)"
     @Published var fileSize: Int64 = 0
@@ -49,6 +51,7 @@ final class TestModel: ObservableObject {
     @Published var previousStderr = ""
     @Published var loadAttempted = false
     @Published var cancelNote = ""
+    @Published var preflightNote = ""
     @Published var busy = false
 
     private let queue = DispatchQueue(label: "kt.native", qos: .userInitiated)
@@ -68,6 +71,12 @@ final class TestModel: ObservableObject {
         if let note = AudioCppDiagnostics.previousRunNote(stage: UserDefaults.standard.string(forKey: Self.breadcrumbKey), nativeLog: oldLog) {
             previousRun = note
             previousStderr = oldLog
+            // Kept across relaunches (LiveContainer has no Xcode console) until "Clear previous-run record" is tapped.
+            UserDefaults.standard.set(note, forKey: Self.crashNoteKey)
+            UserDefaults.standard.set(oldLog, forKey: Self.crashLogKey)
+        } else if let note = UserDefaults.standard.string(forKey: Self.crashNoteKey) {
+            previousRun = note
+            previousStderr = UserDefaults.standard.string(forKey: Self.crashLogKey) ?? ""
         }
         UserDefaults.standard.removeObject(forKey: Self.breadcrumbKey)
         // Truncates the log file: stderrTail only ever holds output of THIS run.
@@ -77,11 +86,23 @@ final class TestModel: ObservableObject {
 
     // MARK: file selection + validation
 
-    /// A new attempt discards the previous run's stage note and native log so they cannot be mistaken for it.
+    /// A new attempt clears every current-attempt field and the live native log. The previous run's record stays
+    /// (it is always printed under its own "PREVIOUS RUN" heading) until the user clears it.
     private func startNewAttempt() {
-        previousRun = ""; previousStderr = ""; stderrTail = ""; loadAttempted = false
+        stderrTail = ""; loadAttempted = false; preflightNote = ""
         UserDefaults.standard.removeObject(forKey: Self.breadcrumbKey)
         _ = kt_redirect_stderr(stderrPath)
+    }
+
+    func clearPreviousRun() {
+        previousRun = ""; previousStderr = ""
+        UserDefaults.standard.removeObject(forKey: Self.crashNoteKey)
+        UserDefaults.standard.removeObject(forKey: Self.crashLogKey)
+    }
+
+    private func resetSynthesisState() {
+        synthStep = .idle; synthElapsed = nil; synthError = ""; synthDetail = ""; audioURL = nil; cancelNote = ""
+        preflightNote = ""
     }
 
     func select(_ picked: URL) {
@@ -189,6 +210,7 @@ final class TestModel: ObservableObject {
         guard verdict?.canProceed == true else { return }
         busy = true
         loadStep = .running; loadError = ""; loadDescribe = ""; loadElapsed = nil
+        resetSynthesisState()
         loadAttempted = true
         stderrTail = ""
         _ = kt_redirect_stderr(stderrPath)
@@ -224,8 +246,17 @@ final class TestModel: ObservableObject {
 
     func synthesize() {
         guard let engine, !busy else { return }
-        busy = true; cancelRequested = false; cancelNote = ""
-        synthStep = .running; synthError = ""; synthDetail = ""; synthElapsed = nil; audioURL = nil
+        resetSynthesisState()
+        refreshResources()
+        let preflight = SynthesisPreflight.assess(availableMemory: snapshot?.availableMemory)
+        preflightNote = preflight.message
+        guard preflight.canProceed else {
+            synthStep = .failed
+            synthError = preflight.message
+            return
+        }
+        busy = true; cancelRequested = false
+        synthStep = .running
         let text = self.text, voice = self.voice, seed = Int64(self.seed)
         crumb("native synthesis")
         queue.async { [weak self] in
@@ -292,7 +323,8 @@ final class TestModel: ObservableObject {
     func unload() {
         guard let e = engine else { return }
         engine = nil
-        loadStep = .idle
+        loadStep = .idle; loadElapsed = nil; loadDescribe = ""; loadError = ""; loadAttempted = false
+        resetSynthesisState()
         queue.async { kt_unload(e) }
     }
 
@@ -382,6 +414,7 @@ final class TestModel: ObservableObject {
         l.append("")
         l.append("-- inference --")
         l.append("status: \(synthStep.rawValue); voice: \(voice); seed: \(seed); text chars: \(text.count); elapsed: \(synthElapsed.map { String(format: "%.2f s", $0) } ?? "-")")
+        if !preflightNote.isEmpty { l.append(preflightNote) }
         if !synthDetail.isEmpty { l.append("output: \(synthDetail)") }
         if !synthError.isEmpty { l.append("error: \(synthError)") }
         if !cancelNote.isEmpty { l.append(cancelNote) }
@@ -458,6 +491,7 @@ struct TestView: View {
                                 Button(copied ? "Copied" : "Copy") { UIPasteboard.general.string = m.diagnostics; copied = true
                                     DispatchQueue.main.asyncAfter(deadline: .now() + 2) { copied = false } }
                                 ShareLink("Export", item: m.diagnostics)
+                                if !m.previousRun.isEmpty { Button("Clear previous-run record") { m.clearPreviousRun() } }
                                 Button("Refresh log") { m.stderrTail = TestModel.tail(of: NSTemporaryDirectory() + "kt-native-stderr.log") }
                             }
                             Text(m.diagnostics).font(.system(.caption2, design: .monospaced)).textSelection(.enabled)

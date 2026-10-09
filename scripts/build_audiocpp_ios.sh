@@ -46,12 +46,21 @@ fi
 git -C "$SRC" fetch --quiet --depth 1 origin "$AUDIOCPP_REF"
 git -C "$SRC" checkout --quiet --force FETCH_HEAD
 test "$(git -C "$SRC" rev-parse HEAD)" = "$AUDIOCPP_REF" || { echo "pinned revision mismatch" >&2; exit 1; }
-# Bound the ggml metadata arenas (root cause of the 2 GiB ggml_init abort); see scripts/patches/.
-PATCH="$ROOT/scripts/patches/audiocpp-weight-store-metadata-arena.patch"
-git -C "$SRC" apply --check "$PATCH" || { echo "patch does not apply to the pinned revision" >&2; exit 1; }
-git -C "$SRC" apply "$PATCH"
+# Bound the ggml metadata arenas and make ggml_init() fail softly; see scripts/patches/ (each patch states why).
+#  - weight-store arena: root cause of the 2 GiB ggml_init abort during model load.
+#  - S3 flow-encoder arenas: ten layers x 320 MiB + 3 more reserved at once during synthesis (128 MiB abort).
+#  - ggml_init(): return NULL (callers throw -> error status) instead of GGML_ASSERT when the arena malloc fails.
+for name in audiocpp-weight-store-metadata-arena audiocpp-s3-flow-encoder-metadata-arena ggml-init-return-null-on-oom; do
+  PATCH="$ROOT/scripts/patches/$name.patch"
+  git -C "$SRC" apply --check "$PATCH" || { echo "patch $name does not apply to the pinned revision" >&2; exit 1; }
+  git -C "$SRC" apply "$PATCH"
+done
 grep -q kMaxMetadataContextBytes "$SRC/include/engine/framework/core/backend_weight_store.h" \
   || { echo "weight-store arena patch missing" >&2; exit 1; }
+grep -q metadata_arena_bytes "$SRC/src/models/chatterbox/s3gen_flow.cpp" \
+  || { echo "S3 flow-encoder arena patch missing" >&2; exit 1; }
+grep -q "failed to allocate the %zu byte context arena" "$SRC/external/ggml/src/ggml.c" \
+  || { echo "ggml_init soft-failure patch missing" >&2; exit 1; }
 echo "== source =="; git -C "$SRC" log -1 --format='%H %s'
 grep -n "kitten_tts2" "$SRC/CMakeLists.txt" | head -3
 

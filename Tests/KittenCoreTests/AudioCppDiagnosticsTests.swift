@@ -40,4 +40,35 @@ final class AudioCppDiagnosticsTests: XCTestCase {
         let silent = AudioCppDiagnostics.previousRunNote(stage: "native model load", nativeLog: "")
         XCTAssertTrue(silent!.contains("memory pressure"))
     }
+
+    func testEncoderArenaReservationWasThreeAndAHalfGiBAndIsNowBounded() {
+        XCTAssertEqual(AudioCppSynthesisArenas.requestedEncoderBytes, 3648 * AudioCppSynthesisArenas.mib)
+        XCTAssertLessThan(AudioCppSynthesisArenas.patchedEncoderBytes * 5, AudioCppSynthesisArenas.requestedEncoderBytes)
+        XCTAssertEqual(AudioCppSynthesisArenas.peakReservationBytes, 646 * AudioCppSynthesisArenas.mib)
+    }
+
+    func testSynthesisPreflightRefusesOnlyWhenKnownHeadroomIsTooSmall() {
+        let mib = AudioCppSynthesisArenas.mib
+        XCTAssertFalse(SynthesisPreflight.assess(availableMemory: 100 * mib).canProceed)
+        XCTAssertTrue(SynthesisPreflight.assess(availableMemory: 100 * mib).message.contains("refused"))
+        XCTAssertTrue(SynthesisPreflight.assess(availableMemory: 2048 * mib).canProceed)
+        XCTAssertTrue(SynthesisPreflight.assess(availableMemory: nil).canProceed)
+        XCTAssertTrue(SynthesisPreflight.assess(availableMemory: 0).canProceed)
+    }
+
+    func testFailedAllocationSizeIsParsedFromUserLog() {
+        let log = "ggml_aligned_malloc: insufficient memory (attempted to allocate 128.00 MB)\nKT_NATIVE_ABORT: /x/ggml.c:1685: GGML_ASSERT(ctx->mem_buffer != NULL) failed\n"
+        XCTAssertEqual(AudioCppDiagnostics.failedAllocationMB(in: log), "128.00")
+        XCTAssertNil(AudioCppDiagnostics.failedAllocationMB(in: "all fine"))
+    }
+
+    func testSynthesisStageCrashIsNotDescribedAsLoadFailure() {
+        let log = "ggml_aligned_malloc: insufficient memory (attempted to allocate 128.00 MB)\nKT_NATIVE_ABORT: ggml.c:1685: GGML_ASSERT(ctx->mem_buffer != NULL) failed\n"
+        let note = AudioCppDiagnostics.previousRunNote(stage: "native synthesis (2026-10-09T19:09:24Z)", nativeLog: log)!
+        XCTAssertTrue(note.hasPrefix("PREVIOUS RUN (not the current attempt)"))
+        XCTAssertTrue(note.contains("not a model-load failure"))
+        XCTAssertTrue(note.contains("malloc of 128.00 MB failed"))
+        let load = AudioCppDiagnostics.previousRunNote(stage: "native model load (x)", nativeLog: log)!
+        XCTAssertFalse(load.contains("not a model-load failure"))
+    }
 }
