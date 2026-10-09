@@ -61,6 +61,17 @@ final class AppModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
         return ((try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []).sorted()
     }
 
+    /// Metadata-only verification of the installed KittenTTS 2 bundle plus the (unlinked) native runtime status.
+    func kitten2Report() -> String {
+        _ = installRevision
+        let dir = modelRoot.appendingPathComponent("kitten2")
+        let report = BundleVerifier.verify(directory: dir)
+        let gate = GenerationGate.evaluate(report: report, runtime: NativeKittenRuntime())
+        let budget = DeviceBudget.assess(modelBytes: report.modelBytes, physicalMemory: ProcessInfo.processInfo.physicalMemory)
+        return report.summary + "\nMemory estimate: " + budget.text
+            + "\nGeneration: " + (gate.enabled ? "enabled" : "disabled – " + gate.reasons.joined(separator: "; "))
+    }
+
     var canGenerate: Bool { family == .legacy08 && isInstalled(legacyVariant) && !busy }
 
     func show(_ text: String, error: Bool = false) {

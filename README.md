@@ -19,6 +19,10 @@ Upstream's official KittenTTS 2 weights are ~1 GB (947 MiB Python weights / 1.03
 
 KittenTTS 2 inference requires upstream's `kitten-tts-2-cpp`: a custom llama.cpp fork (the `TQ2_1` format cannot be loaded by stock llama.cpp), a **CPU LibTorch TorchScript decoder**, and the `kitten-text-processing` normalizer. Upstream documents it only as a desktop CPU CLI (needs C++20, CMake, LibTorch; "The runtime is a batch CLI"). There is no published iOS build, LibTorch-for-iOS decoder export, or Swift/C API. Even the compact export needs ~1 GB of storage plus several hundred MB of RAM for the LM, plus the decoder; the FP16 export (3.47 GB) is not realistic on phones. So this app **validates and stores** KittenTTS 2 files but **disables synthesis with an explanation** rather than faking output or contacting a server. Porting it would need an iOS build of the fork and a non-LibTorch (or LibTorch-Lite) decoder, which is outside what upstream publishes. Not claimed to work: voice cloning (needs offline Python preparation + transcript upstream) and streaming (not implemented upstream).
 
+### Prototype status
+
+See [docs/KITTENTTS2_IOS_FEASIBILITY.md](docs/KITTENTTS2_IOS_FEASIBILITY.md): a C bridge stub, bundle verifier, memory heuristic and an experimental CI probe for the iOS build of the TQ2_1 llama.cpp fork. **This is a feasibility spike, not production-ready; KittenTTS 2 audio has not been generated on iOS.**
+
 ## Import steps
 
 1. Open the **Models** tab and choose the family.

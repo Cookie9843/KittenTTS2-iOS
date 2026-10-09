@@ -11,7 +11,8 @@ let package = Package(
         .library(name: "KittenCore", targets: ["KittenCore"]),
     ],
     targets: [
-        .target(name: "KittenCore", path: "Sources/KittenCore"),
+        .target(name: "CKittenBridge", path: "Sources/CKittenBridge"),
+        .target(name: "KittenCore", dependencies: ["CKittenBridge"], path: "Sources/KittenCore"),
         .testTarget(
             name: "KittenCoreTests",
             dependencies: ["KittenCore"],

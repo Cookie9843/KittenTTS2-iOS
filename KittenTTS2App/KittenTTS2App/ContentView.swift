@@ -107,6 +107,7 @@ struct ModelsView: View {
                     Section("Installed files") {
                         let files = model.kitten2Files()
                         Text(files.isEmpty ? "None" : files.joined(separator: ", ")).font(.footnote)
+                        if !files.isEmpty { Text(model.kitten2Report()).font(.caption.monospaced()) }
                         Text("KittenTTS 2 cannot synthesize on iOS yet (see Speak tab). There is no download button: official assets are large (≥1 GB), so import a file you already have.")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
