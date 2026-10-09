@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# NOTE: UI-only build (KittenTTS 2 runtime NOT linked). For the full app use scripts/build_app_ipa.sh.
 set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

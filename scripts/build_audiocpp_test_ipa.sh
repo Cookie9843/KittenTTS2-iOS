@@ -18,7 +18,7 @@ LIBS=()
 while read -r lib; do LIBS+=("$lib"); done < "$WORK/libs.txt"
 
 rm -rf "$OUT"; mkdir -p "$APP" "$OUT/obj"
-xcrun --sdk iphoneos clang -c -std=c11 -O2 -arch arm64 -isysroot "$SDK" -miphoneos-version-min=$MINOS \
+xcrun --sdk iphoneos clang -c -std=c11 -O2 -DKT_NATIVE_LINKED=1 -arch arm64 -isysroot "$SDK" -miphoneos-version-min=$MINOS \
   -I"$SRC/include" -I"$SRC/external/ggml/include" -I"$ROOT/NativeAudioCpp" "$ROOT/NativeAudioCpp/kt_audiocpp_bridge.c" -o "$OUT/obj/bridge.o"
 
 xcrun --sdk iphoneos swiftc -parse-as-library -O -target arm64-apple-ios$MINOS -sdk "$SDK" \

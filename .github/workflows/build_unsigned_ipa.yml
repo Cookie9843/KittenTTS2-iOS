@@ -1,4 +1,4 @@
-name: Build Unsigned IPA
+name: Build UI-only app (device + simulator compile check)
 
 on:
   pull_request:
@@ -40,20 +40,18 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build
 
-      - name: Package unsigned IPA
+      - name: Build app for iOS Simulator (iPhone and iPad idioms)
         run: |
           set -euo pipefail
-          APP_PATH="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphoneos/KittenTTS2App.app"
-          test -d "$APP_PATH"
+          xcodebuild \
+            -project "KittenTTS2App/KittenTTS2App.xcodeproj" \
+            -scheme "KittenTTS2App" \
+            -configuration Debug \
+            -destination "generic/platform=iOS Simulator" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedDataSim" \
+            CODE_SIGNING_ALLOWED=NO \
+            build
 
-          mkdir -p "$RUNNER_TEMP/ipa/Payload"
-          cp -R "$APP_PATH" "$RUNNER_TEMP/ipa/Payload/"
-          cd "$RUNNER_TEMP/ipa"
-          /usr/bin/zip -qry "$GITHUB_WORKSPACE/KittenTTS2App-unsigned.ipa" Payload
-
-      - name: Upload IPA
-        uses: actions/upload-artifact@v4
-        with:
-          name: KittenTTS2App-unsigned-ipa
-          path: KittenTTS2App-unsigned.ipa
-          if-no-files-found: error
+      # The IPA that contains the KittenTTS 2 runtime is produced by "iOS audio.cpp KittenTTS 2 test IPA + full app IPA"
+      # (artifact KittenTTS-unsigned-ipa). This job compiles the UI-only variant (runtime stub) as a fast check and
+      # deliberately uploads no IPA so that a runtime-less build cannot be mistaken for the real app.

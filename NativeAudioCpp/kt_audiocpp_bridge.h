@@ -39,6 +39,17 @@ int kt_load(const char *path, int threads, kt_engine **out, char *describe, size
 int kt_synthesize(kt_engine *engine, const char *text, const char *voice_id, int64_t seed, kt_audio *out,
                   char *err, size_t err_cap);
 
+/* Voice cloning (audio.cpp task "clon"): `reference` is mono float PCM (1-30 s, `reference_rate` Hz) and
+ * `transcript` is what is said in it (the runtime does not transcribe). The engine holds ONE session at a time:
+ * switching between preset TTS and cloning frees the previous session before creating the other, so the weights are
+ * never loaded twice. Blocks until done; not interruptible. */
+int kt_synthesize_clone(kt_engine *engine, const char *text, const float *reference, size_t reference_frames,
+                        int reference_rate, const char *transcript, int64_t seed, kt_audio *out, char *err,
+                        size_t err_cap);
+
+/* 1 when this build links the real audio.cpp runtime (-DKT_NATIVE_LINKED=1), 0 for the UI-only stub build. */
+int kt_runtime_linked(void);
+
 void kt_audio_free(kt_audio *audio);
 void kt_unload(kt_engine *engine);
 

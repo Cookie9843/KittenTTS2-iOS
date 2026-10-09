@@ -1,6 +1,44 @@
 # KittenTTS2-iOS
 
-An iOS app that imports, validates and (where technically possible) runs KittenML's Kitten TTS models on-device, with generation history, playback and WAV export.
+An on-device text-to-speech app for **iPhone and iPad (iOS 16.4+)** with two model families, all synthesis offline once a model is downloaded:
+
+- **KittenTTS 2** (community single-file package from [`dignome/kitten_tts2`](https://huggingface.co/dignome/kitten_tts2/tree/main)): 48 preset voices, multilingual, and **voice cloning** from a 1–30 s reference recording plus the text spoken in it. Runs on the native audio.cpp runtime linked into the app.
+- **KittenTTS 0.8** (the original lightweight Nano/Micro/Mini models; people sometimes call them "TTS 1" - there is no official "KittenTTS 1" release): 8 voices, speed control.
+
+Screens: **Speak** (type, pick voice, play, save WAV), **Voices** (preset voices, cloning with microphone or imported audio, preview and re-record), **Models** (explicit downloads with progress/pause/resume/delete, licenses, diagnostics), **History**.
+
+## Status and evidence (kept separate on purpose)
+
+| Claim | Evidence |
+| --- | --- |
+| Download manifest, SHA-256 / size verification, resume, cancel, error paths, atomic install, preset/clone input rules, WAV decoding | `swift test` (65 tests, Linux, mock transport). No real Hugging Face traffic in tests |
+| The app UI code and the native link compile for iOS | CI only (see workflows below); check the Actions run, nothing here is claimed from local runs |
+| KittenTTS 2 load + preset synthesis on real hardware | **User-observed, not CI:** one iPad16,5 on iOS 27.0 with the diagnostic test app (audio.cpp `ad1473c`): load 10.55 s, 75,360 samples at 24 kHz generated in 7.42 s (RTF 2.36x), 2.52 GB reported available while weights were memory-mapped. Other devices/conditions are unverified; iOS may terminate the app |
+| Voice cloning on device | **Not verified on any device.** The path calls audio.cpp's `clon` task; it has only been checked against the pinned source |
+| KittenTTS 0.8 | Existing path, unchanged by this work; not re-verified on a device here |
+| macOS, Android | **Not supported** (see below) |
+
+The model is **never bundled** in the repository, CI or IPA. KittenTTS 2 is 3,282,123,776 bytes (3.28 GB, SHA-256 `e97920ca5053f9fcd4de638dcd8114ed2510d4291a93257473a8843c3ff349ad`); the app asks for confirmation (Wi-Fi only by default, storage check), streams to a temporary file, verifies exact size and SHA-256, and only then installs it atomically in Application Support. The file is memory-mapped, so its size is not the same as resident memory, but devices with little free memory may still fail; the app shows warnings based on `os_proc_available_memory`, not guarantees.
+
+Limitations: generation cannot be interrupted once started (the UI says so); no automatic transcription - for cloning you type what the reference says; downloads pause/resume while the app is open (no `URLSession` background transfers yet); importing your own KittenTTS 2 file and saving named clone profiles are not implemented; the app records diagnostics and a previous-run note so a native crash is explained at next launch.
+
+### Platforms
+
+Supported: iPhone and iPad on iOS 16.4+ (device family 1,2). **Not supported yet:** native macOS (needs a separate macOS audio.cpp build and target; follow-up), Android, watchOS, tvOS, visionOS. `Package.swift` lists macOS only so `swift test` runs there.
+
+### Builds, signing, LiveContainer
+
+- Workflow *iOS audio.cpp KittenTTS 2 test IPA + full app IPA* builds the audio.cpp runtime and produces two **unsigned** artifacts: `KittenTTS-unsigned-ipa` (full app, runtime linked) and `KittenTTS2AudioCppTest-unsigned-ipa` (diagnostic test app). Both must be signed by you; unsigned IPAs may be restricted by LiveContainer (not tested). The workflow fails if a `.gguf` is inside the IPA.
+- Workflow *Build UI-only app* compiles the app without the runtime (device + simulator) and deliberately uploads no IPA.
+- Provenance: native runtime `dignome/audio.cpp-custom` @ `ad1473cd460177480e8a0dc625bd46f76ea49aae`, `AUDIOCPP_MODELS=kitten_tts2`, CPU only, plus the patches in `scripts/patches/`.
+
+### License and attribution
+
+KittenTTS 2 weights are a **community conversion** (not an official KittenML file) of KittenML / Stellon Labs' model, under the Stellon Labs Community License with embedded LICENSE/NOTICE files. The app shows this and asks for acknowledgment before downloading. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) (also in the app's Models tab).
+
+---
+
+# Background notes (earlier research, still accurate for the sources it cites)
 
 ## Which model is which (verified against upstream docs)
 
@@ -61,15 +99,15 @@ Wrong-family files get an explanation of what was detected, what is expected, an
 ## Limitations
 
 - 0.8 backend: first use fetches small phonemizer data files (EPhonemizer) from the network if absent; generation cannot be cancelled once started; English text only; 8 voices.
-- No voice cloning or expression tags (KittenTTS 2 features) – requires the unavailable runtime.
-- iOS 16+; unsigned IPA needs signing to install on a device.
+- (Superseded by the status section above: KittenTTS 2 now runs through audio.cpp for the single-file community package; the KittenML TQ2_1 file is still unsupported in the main app.)
+- iOS 16.4+; unsigned IPA needs signing to install on a device.
 
 ## Development
 
 - `swift test` – tests for file-format detection, validation, atomic import, history and WAV encoding (`Sources/KittenCore`).
 - `KittenTTS2App/KittenTTS2App.xcodeproj` – SwiftUI app (depends on the local `KittenCore` package and `KittenML/KittenTTS-swift` 0.1.0).
-- GitHub Actions (`.github/workflows/build_unsigned_ipa.yml`) runs `swift test`, `xcodebuild`, and uploads `KittenTTS2App-unsigned-ipa`.
-- `scripts/build_unsigned_ipa.sh` – local macOS build.
+- GitHub Actions: `build_unsigned_ipa.yml` runs `swift test` and UI-only `xcodebuild` (device + simulator); `ios_audiocpp_kitten2.yml` builds the runtime and the unsigned IPAs.
+- `scripts/build_app_ipa.sh` – full app IPA linked against the runtime (needs `WORK` from `build_audiocpp_ios.sh`); `scripts/build_unsigned_ipa.sh` – UI-only local build.
 
 ## Licensing / provenance
 

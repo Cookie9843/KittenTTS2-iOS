@@ -11,6 +11,11 @@
 		A10000000000000000000003 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* AppModel.swift */; };
 		A10000000000000000000004 /* KittenCore in Frameworks */ = {isa = PBXBuildFile; productRef = AC0000000000000000000001 /* KittenCore */; };
 		A10000000000000000000005 /* KittenTTS in Frameworks */ = {isa = PBXBuildFile; productRef = AC0000000000000000000002 /* KittenTTS */; };
+		A10000000000000000000006 /* Kitten2Engine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* Kitten2Engine.swift */; };
+		A10000000000000000000007 /* Kitten2Model.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000007 /* Kitten2Model.swift */; };
+		A10000000000000000000008 /* ReferenceAudioIO.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000008 /* ReferenceAudioIO.swift */; };
+		A10000000000000000000009 /* kt_audiocpp_bridge.c in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000A /* kt_audiocpp_bridge.c */; };
+		A1000000000000000000000A /* THIRD_PARTY_NOTICES.md in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000C /* THIRD_PARTY_NOTICES.md */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -19,6 +24,13 @@
 		A20000000000000000000005 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		A20000000000000000000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A20000000000000000000004 /* KittenTTS2App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KittenTTS2App.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A20000000000000000000006 /* Kitten2Engine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Kitten2Engine.swift; sourceTree = "<group>"; };
+		A20000000000000000000007 /* Kitten2Model.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Kitten2Model.swift; sourceTree = "<group>"; };
+		A20000000000000000000008 /* ReferenceAudioIO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReferenceAudioIO.swift; sourceTree = "<group>"; };
+		A20000000000000000000009 /* bridging.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bridging.h; sourceTree = "<group>"; };
+		A2000000000000000000000A /* kt_audiocpp_bridge.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = kt_audiocpp_bridge.c; path = ../NativeAudioCpp/kt_audiocpp_bridge.c; sourceTree = SOURCE_ROOT; };
+		A2000000000000000000000B /* kt_audiocpp_bridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = kt_audiocpp_bridge.h; path = ../NativeAudioCpp/kt_audiocpp_bridge.h; sourceTree = SOURCE_ROOT; };
+		A2000000000000000000000C /* THIRD_PARTY_NOTICES.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = THIRD_PARTY_NOTICES.md; path = ../THIRD_PARTY_NOTICES.md; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -30,6 +42,7 @@
 			isa = PBXGroup;
 			children = (
 				A40000000000000000000002 /* KittenTTS2App */,
+				A40000000000000000000004 /* Shared native bridge and notices */,
 				A40000000000000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -40,9 +53,23 @@
 				A20000000000000000000001 /* App.swift */,
 				A20000000000000000000002 /* ContentView.swift */,
 				A20000000000000000000005 /* AppModel.swift */,
+				A20000000000000000000006 /* Kitten2Engine.swift */,
+				A20000000000000000000007 /* Kitten2Model.swift */,
+				A20000000000000000000008 /* ReferenceAudioIO.swift */,
+				A20000000000000000000009 /* bridging.h */,
 				A20000000000000000000003 /* Info.plist */,
 			);
 			path = KittenTTS2App;
+			sourceTree = "<group>";
+		};
+		A40000000000000000000004 /* Shared native bridge and notices */ = {
+			isa = PBXGroup;
+			children = (
+				A2000000000000000000000A /* kt_audiocpp_bridge.c */,
+				A2000000000000000000000B /* kt_audiocpp_bridge.h */,
+				A2000000000000000000000C /* THIRD_PARTY_NOTICES.md */,
+			);
+			name = "Shared native bridge and notices";
 			sourceTree = "<group>";
 		};
 		A40000000000000000000003 /* Products */ = {
@@ -73,11 +100,11 @@
 /* End PBXNativeTarget section */
 
 /* Begin PBXSourcesBuildPhase section */
-		A60000000000000000000001 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001 /* App.swift in Sources */, A10000000000000000000002 /* ContentView.swift in Sources */, A10000000000000000000003 /* AppModel.swift in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
+		A60000000000000000000001 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001 /* App.swift in Sources */, A10000000000000000000002 /* ContentView.swift in Sources */, A10000000000000000000003 /* AppModel.swift in Sources */, A10000000000000000000006 /* Kitten2Engine.swift in Sources */, A10000000000000000000007 /* Kitten2Model.swift in Sources */, A10000000000000000000008 /* ReferenceAudioIO.swift in Sources */, A10000000000000000000009 /* kt_audiocpp_bridge.c in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXResourcesBuildPhase section */
-		A70000000000000000000001 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A70000000000000000000001 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A1000000000000000000000A /* THIRD_PARTY_NOTICES.md in Resources */, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXProject section */
@@ -99,10 +126,10 @@
 /* End PBXProject section */
 
 /* Begin XCBuildConfiguration section */
-		AB0000000000000000000001 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 16.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; }; name = Debug; };
-		AB0000000000000000000002 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 16.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; }; name = Release; };
-		AB0000000000000000000003 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = KittenTTS2App/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 16.0; PRODUCT_BUNDLE_IDENTIFIER = com.cookie9843.KittenTTS2App; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Debug; };
-		AB0000000000000000000004 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = KittenTTS2App/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 16.0; PRODUCT_BUNDLE_IDENTIFIER = com.cookie9843.KittenTTS2App; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
+		AB0000000000000000000001 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 16.4; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; }; name = Debug; };
+		AB0000000000000000000002 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 16.4; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; }; name = Release; };
+		AB0000000000000000000003 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {GENERATE_INFOPLIST_FILE = NO; HEADER_SEARCH_PATHS = "$(inherited) $(SRCROOT)/../NativeAudioCpp $(AUDIOCPP_SOURCE_ROOT)/include $(AUDIOCPP_SOURCE_ROOT)/external/ggml/include"; SWIFT_OBJC_BRIDGING_HEADER = KittenTTS2App/bridging.h; INFOPLIST_FILE = KittenTTS2App/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 16.4; PRODUCT_BUNDLE_IDENTIFIER = com.cookie9843.KittenTTS2App; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Debug; };
+		AB0000000000000000000004 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {GENERATE_INFOPLIST_FILE = NO; HEADER_SEARCH_PATHS = "$(inherited) $(SRCROOT)/../NativeAudioCpp $(AUDIOCPP_SOURCE_ROOT)/include $(AUDIOCPP_SOURCE_ROOT)/external/ggml/include"; SWIFT_OBJC_BRIDGING_HEADER = KittenTTS2App/bridging.h; INFOPLIST_FILE = KittenTTS2App/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 16.4; PRODUCT_BUNDLE_IDENTIFIER = com.cookie9843.KittenTTS2App; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
