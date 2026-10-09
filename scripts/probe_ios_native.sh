@@ -37,7 +37,7 @@ grep -n "TQ2_1" "$WORK/src/ggml/include/ggml.h" | head -3
 
 echo "== configure (iOS arm64, $GENERATOR, no signing needed) =="
 LAST_STEP="configure"
-cmake -G "$GENERATOR" "${CCACHE_ARGS[@]}" -S "$WORK/src" -B "$WORK/build" \
+cmake -G "$GENERATOR" ${CCACHE_ARGS[@]+"${CCACHE_ARGS[@]}"} -S "$WORK/src" -B "$WORK/build" \
   -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphoneos -DCMAKE_OSX_ARCHITECTURES=arm64 \
   -DCMAKE_OSX_DEPLOYMENT_TARGET=16.4 -DCMAKE_BUILD_TYPE=Release \
   -DBUILD_SHARED_LIBS=OFF -DGGML_METAL=OFF -DGGML_OPENMP=OFF -DGGML_BLAS=OFF \

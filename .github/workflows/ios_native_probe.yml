@@ -24,7 +24,7 @@ jobs:
       - name: Restore ccache
         uses: actions/cache@v4
         with:
-          path: ~/Library/Caches/ccache
+          path: ${{ runner.temp }}/ccache
           key: ccache-ios-llama-${{ runner.os }}-${{ github.sha }}
           restore-keys: ccache-ios-llama-${{ runner.os }}-
       - name: Build custom llama.cpp fork for iOS arm64
@@ -33,6 +33,7 @@ jobs:
           WORK: ${{ runner.temp }}/probe
           LOG_DIR: ${{ runner.temp }}/probe-logs
           CCACHE_MAXSIZE: 1G
+          CCACHE_DIR: ${{ runner.temp }}/ccache
         run: |
           set -o pipefail
           mkdir -p "$LOG_DIR"
