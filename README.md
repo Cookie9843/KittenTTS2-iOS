@@ -45,6 +45,8 @@ The community file `kitten-tts2-native-q8-multilingual.gguf` (3,282,123,776 byte
 
 The native call cannot be interrupted: *Cancel* waits for it to finish and discards the result. Models stay user-provided and out of CI; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the Stellon Labs Community License / NOTICE and audio.cpp licensing. The older `NativeProbe/` app is only for KittenML's upstream `model-tq2_1.gguf`.
 
+**2 GiB `ggml_init` abort (`insufficient memory (attempted to allocate 2048.00 MB)`).** Root cause in the pinned source: `load_s3_flow_decoder_weights` (`src/models/chatterbox/s3gen_flow.cpp`) builds a `BackendWeightStore` with `context_bytes = 2 GiB`; the store calls `ggml_init({context_bytes, nullptr, no_alloc=true})`, which `malloc`s the whole arena up front and `GGML_ASSERT`s on failure. With `no_alloc=true` that arena holds only tensor headers (~0.4 KB each; the whole GGUF has 2856 tensors, so ~1 MB), not weights. Other stores ask for 0.5–1 GiB each. `scripts/patches/audiocpp-weight-store-metadata-arena.patch` (applied by `build_audiocpp_ios.sh`) caps the arena at 64 MiB; exceeding it makes `ggml_new_tensor` fail into a normal C++ exception. Weights still go to a real backend buffer, and the decoder/vocoder/encoders request F32 storage, so the *actual* weight memory is unchanged and not yet verified on a device. A `GGML_ASSERT` is a `SIGABRT`: Swift cannot catch it, and iOS apps cannot spawn a child process to isolate it, so the app only records the assertion text (`KT_NATIVE_ABORT:`) and labels it as a previous run on next launch. Diagnostics are reset on every new file selection/load, so old crash logs are never shown as the current attempt.
+
 ## Import steps
 
 1. Open the **Models** tab and choose the family.
