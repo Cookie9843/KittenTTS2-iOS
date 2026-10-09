@@ -1,0 +1,113 @@
+name: iOS audio.cpp KittenTTS 2 test IPA
+
+# Builds the REAL audio.cpp kitten_tts2 CPU runtime for iOS arm64 and links it into an unsigned test app.
+# CI proves compilation/linking only. Model load and audio generation can only be proven on a device with the
+# user's kitten-tts2-native-q8-multilingual.gguf; the model is never downloaded or committed.
+# Any failing step fails the job (no continue-on-error).
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - NativeAudioCpp/**
+      - Sources/KittenCore/AudioCppGGUF.swift
+      - Sources/KittenCore/WAVEncoder.swift
+      - scripts/build_audiocpp_ios.sh
+      - scripts/build_audiocpp_test_ipa.sh
+      - scripts/cmake/**
+      - THIRD_PARTY_NOTICES.md
+      - .github/workflows/ios_audiocpp_kitten2.yml
+  push:
+    branches:
+      - main
+    paths:
+      - NativeAudioCpp/**
+      - scripts/build_audiocpp_ios.sh
+      - scripts/build_audiocpp_test_ipa.sh
+      - scripts/cmake/**
+      - .github/workflows/ios_audiocpp_kitten2.yml
+
+permissions:
+  contents: read
+
+jobs:
+  swift-tests:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: swift test (audio.cpp GGUF metadata parsing, validation, resource checks)
+        run: swift test
+
+  audiocpp-ios-ipa:
+    needs: swift-tests
+    runs-on: macos-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set work directories
+        run: |
+          {
+            echo "WORK=$RUNNER_TEMP/audiocpp-work"
+            echo "LOG_DIR=$RUNNER_TEMP/audiocpp-logs"
+            echo "OUT=$RUNNER_TEMP/audiocpp-ipa"
+            echo "CCACHE_DIR=$RUNNER_TEMP/ccache"
+            echo "CCACHE_MAXSIZE=2G"
+          } >> "$GITHUB_ENV"
+      - name: Install ninja and ccache
+        run: brew install ninja ccache
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/ccache
+          key: ccache-ios-audiocpp-${{ runner.os }}-${{ github.sha }}
+          restore-keys: ccache-ios-audiocpp-${{ runner.os }}-
+      - name: Build audio.cpp kitten_tts2 runtime for iOS arm64
+        timeout-minutes: 150
+        run: |
+          set -o pipefail
+          mkdir -p "$LOG_DIR"
+          ./scripts/build_audiocpp_ios.sh 2>&1 | tee "$LOG_DIR/build_audiocpp_ios.log"
+      - name: Require native build verification line
+        run: |
+          grep -q '^RESULT: audio.cpp kitten_tts2 CPU runtime + C ABI built for iOS arm64' "$LOG_DIR/build_audiocpp_ios.log"
+      - name: Link and package unsigned test IPA
+        run: |
+          set -o pipefail
+          ./scripts/build_audiocpp_test_ipa.sh 2>&1 | tee "$LOG_DIR/build_audiocpp_test_ipa.log"
+      - name: Require link verification line
+        run: |
+          grep -q '^RESULT: unsigned test IPA linked against audio.cpp kitten_tts2 runtime' "$LOG_DIR/build_audiocpp_test_ipa.log"
+      - name: Inspect IPA contents (no model weights)
+        run: |
+          set -o pipefail
+          unzip -l "$OUT/KittenTTS2AudioCppTest-unsigned.ipa" | tee "$LOG_DIR/ipa-contents.txt"
+          if grep -qi '\.gguf' "$LOG_DIR/ipa-contents.txt"; then echo "model weights found in IPA" >&2; exit 1; fi
+      - name: Upload unsigned test IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: KittenTTS2AudioCppTest-unsigned-ipa
+          path: ${{ runner.temp }}/audiocpp-ipa/KittenTTS2AudioCppTest-unsigned.ipa
+          if-no-files-found: error
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### audio.cpp KittenTTS 2 iOS test IPA"
+            echo "| Stage | Evidence |"
+            echo "| --- | --- |"
+            echo "| Metadata validation | swift test (fixtures), runs in the app on the selected GGUF |"
+            echo "| Native build/link | $(grep -h '^RESULT:' "$LOG_DIR"/*.log 2>/dev/null | tr '\n' ' ')|"
+            echo "| Model load on iOS | NOT proven by CI (needs the user's device + 3.28 GB GGUF) |"
+            echo "| Audio generation | NOT proven by CI |"
+            echo '```'
+            tail -n 30 "$LOG_DIR/build_audiocpp_ios.log" 2>/dev/null || true
+            tail -n 15 "$LOG_DIR/build_audiocpp_test_ipa.log" 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audiocpp-ios-build-logs
+          path: ${{ runner.temp }}/audiocpp-logs
+          if-no-files-found: warn

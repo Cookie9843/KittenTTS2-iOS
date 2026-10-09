@@ -35,8 +35,10 @@ int kp_read_header(const char *path, char *out, size_t cap) {
     append(out, cap, &len, "GGUF version: %u\nKV pairs: %lld\nTensors: %lld\n",
            gguf_get_version(g), (long long)gguf_get_n_kv(g), (long long)n_tensors);
     int64_t arch = gguf_find_key(g, "general.architecture");
+    int is_audiocpp = 0;
     if (arch >= 0 && gguf_get_kv_type(g, arch) == GGUF_TYPE_STRING) {
         append(out, cap, &len, "general.architecture: %s\n", gguf_get_val_str(g, arch));
+        is_audiocpp = strcmp(gguf_get_val_str(g, arch), "audiocpp") == 0;
     }
     long long tq = 0;
     for (int64_t i = 0; i < n_tensors; i++) {
@@ -46,6 +48,9 @@ int kp_read_header(const char *path, char *out, size_t cap) {
     gguf_free(g);
     if (tq == 0) {
         append(out, cap, &len, "NOTE: no TQ2_1 tensors - this is not a TQ2_1 KittenTTS 2 GGUF.\n");
+        if (is_audiocpp) {
+            append(out, cap, &len, "This is an audio.cpp package (e.g. kitten-tts2-native-q8-multilingual.gguf). It is valid but needs the 'Kitten audio.cpp' test app, not this TQ2_1 probe.\n");
+        }
         return 3;
     }
     append(out, cap, &len, "OK: header parsed by the fork-built ggml.\n");
