@@ -8,8 +8,8 @@
 #include "ggml.h"
 #include "llama.h"
 
-/* Tensor type id of GGML_TYPE_TQ2_1 in the pinned KittenML/kitten-tts-2-cpp fork (stock llama.cpp has no such type). */
-#define KP_TQ2_1 ((enum ggml_type)43)
+/* GGML_TYPE_TQ2_1 exists only in the KittenML/kitten-tts-2-cpp fork headers; stock llama.cpp would not compile this. */
+#define KP_TQ2_1 GGML_TYPE_TQ2_1
 
 static void append(char *out, size_t cap, size_t *len, const char *fmt, ...) __attribute__((format(printf, 4, 5)));
 static void append(char *out, size_t cap, size_t *len, const char *fmt, ...) {
@@ -71,12 +71,22 @@ int kp_load_model(const char *path, char *out, size_t cap) {
            desc, (unsigned long long)llama_model_n_params(model),
            (unsigned long long)llama_model_size(model), llama_model_n_embd(model));
     const struct llama_vocab *vocab = llama_model_get_vocab(model);
+    if (!vocab) {
+        append(out, cap, &len, "FAIL: model has no vocabulary.\n");
+        llama_model_free(model);
+        llama_backend_free();
+        return 3;
+    }
     const char *text = "Hello world.";
     llama_token toks[64];
     int n = llama_tokenize(vocab, text, (int32_t)strlen(text), toks, 64, false, true);
     append(out, cap, &len, "Vocab tokens: %d\nTokenized \"%s\" -> %d tokens\n", llama_vocab_n_tokens(vocab), text, n);
     llama_model_free(model);
     llama_backend_free();
+    if (n <= 0) {
+        append(out, cap, &len, "FAIL: tokenization returned %d.\n", n);
+        return 3;
+    }
     append(out, cap, &len, "OK: model loaded by the fork-built llama. No inference or audio was attempted.\n");
     return 0;
 }

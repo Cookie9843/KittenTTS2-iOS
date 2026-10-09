@@ -34,7 +34,8 @@ xcrun --sdk iphoneos swiftc -parse-as-library -O -target arm64-apple-ios$MINOS -
 
 cp "$ROOT/NativeProbe/Info.plist" "$APP/Info.plist"
 echo "== linked fork symbols =="
-nm "$APP/KittenTTS2NativeProbe" | grep -E " _(llama_model_load_from_file|gguf_init_from_file)$" 
+nm "$APP/KittenTTS2NativeProbe" | grep -E " _(llama_model_load_from_file|gguf_init_from_file)$" \
+  || { echo "fork symbols not linked into the probe binary" >&2; exit 1; }
 lipo -info "$APP/KittenTTS2NativeProbe"
 (cd "$OUT" && /usr/bin/zip -qry "$OUT/KittenTTS2NativeProbe-unsigned.ipa" Payload)
 echo "Unsigned test IPA: $OUT/KittenTTS2NativeProbe-unsigned.ipa"
