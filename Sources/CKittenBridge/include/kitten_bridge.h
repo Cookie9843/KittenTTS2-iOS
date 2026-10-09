@@ -20,7 +20,7 @@ typedef enum {
 } kitten_bridge_status;
 
 typedef struct {
-    /// DeepGrove/KittenML llama.cpp fork (TQ2_1) linked for this platform.
+    /// KittenML/kitten-tts-2-cpp llama.cpp fork (TQ2_1) linked for this platform.
     int32_t llama_fork_linked;
     /// Fork's TQ2_1 tensor type available at runtime.
     int32_t tq2_1_supported;

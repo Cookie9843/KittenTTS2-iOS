@@ -65,6 +65,7 @@ public struct NativeKittenRuntime: KittenRuntime {
     }
 
     public func generate(modelDirectory: URL, text: String) throws -> [Float] {
+        guard capabilities.isComplete else { throw KittenRuntimeError.unavailable(missing: capabilities.missing) }
         var samples = [Float](repeating: 0, count: Self.maxSamples)
         var count = 0
         let status = samples.withUnsafeMutableBufferPointer { buffer in
