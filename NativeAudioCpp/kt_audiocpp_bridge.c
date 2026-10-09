@@ -5,6 +5,14 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Build-variant marker: readable from the object file / final executable (strings, nm) so CI can prove which branch of
+ * this file was actually compiled, independent of what flags the build invocation was given. */
+#ifdef KT_NATIVE_LINKED
+__attribute__((used)) const char kt_bridge_build_variant[] = "kt-bridge-variant:native-linked";
+#else
+__attribute__((used)) const char kt_bridge_build_variant[] = "kt-bridge-variant:ui-only-stub";
+#endif
+
 #ifdef KT_NATIVE_LINKED
 #include "audiocpp.h"
 #include "ggml.h"

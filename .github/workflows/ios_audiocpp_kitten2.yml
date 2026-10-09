@@ -15,6 +15,7 @@ on:
       - Tests/**
       - Package.swift
       - scripts/build_app_ipa.sh
+      - scripts/collect_app_link_diagnostics.sh
       - Sources/KittenCore/AudioCppGGUF.swift
       - Sources/KittenCore/AudioCppDiagnostics.swift
       - scripts/patches/**
@@ -105,6 +106,13 @@ jobs:
         run: |
           set -o pipefail
           OUT="$RUNNER_TEMP/app-ipa" ./scripts/build_app_ipa.sh 2>&1 | tee "$LOG_DIR/build_app_ipa.log"
+      - name: Upload full-app link diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-app-link-diagnostics
+          path: ${{ runner.temp }}/app-ipa/diagnostics
+          if-no-files-found: warn
       - name: Require full-app link verification line
         run: |
           grep -q '^RESULT: unsigned full-app IPA linked against audio.cpp kitten_tts2 runtime' "$LOG_DIR/build_app_ipa.log"
