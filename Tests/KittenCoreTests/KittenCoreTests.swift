@@ -165,11 +165,15 @@ final class KittenCoreTests: XCTestCase {
     // MARK: history / WAV / family
 
     func testWAVHeader() {
-        let d = WAVEncoder.encode(samples: [0, 1, -1, 2], sampleRate: 24000)
-        XCTAssertEqual(d.count, 44 + 8)
+        let d = WAVEncoder.encode(samples: [0, 1, -1, 2, .nan], sampleRate: 24000)
+        XCTAssertEqual(d.count, 44 + 10)
         XCTAssertEqual(String(decoding: d[0..<4], as: UTF8.self), "RIFF")
         XCTAssertEqual(d[22], 1)
         XCTAssertEqual(Int16(littleEndian: d.subdata(in: 46..<48).withUnsafeBytes { $0.loadUnaligned(as: Int16.self) }), 32767)
+        func sample(_ i: Int) -> Int16 { d.subdata(in: (44 + 2 * i)..<(46 + 2 * i)).withUnsafeBytes { Int16(littleEndian: $0.loadUnaligned(as: Int16.self)) } }
+        XCTAssertEqual(sample(2), -32767)
+        XCTAssertEqual(sample(3), 32767)
+        XCTAssertEqual(sample(4), 0)
     }
 
     func testHistoryRoundTrip() throws {

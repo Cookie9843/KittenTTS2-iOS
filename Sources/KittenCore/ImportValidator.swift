@@ -108,7 +108,7 @@ public enum ImportValidator {
                 haveDecoder = true
                 planned.append(PlannedFile(source: file.url, storedName: kitten2DecoderName, size: file.size))
             case .json:
-                guard let object = (try? Data(contentsOf: file.url)).flatMap({ try? JSONSerialization.jsonObject(with: $0) }) as? [String: Any] else {
+                guard file.size <= 64 * 1024 * 1024, let object = (try? Data(contentsOf: file.url)).flatMap({ try? JSONSerialization.jsonObject(with: $0) }) as? [String: Any] else {
                     return fail("Invalid JSON: \(file.name)", "The file is not a valid JSON object.", "Re-download it from the model repository.")
                 }
                 if object["type"] as? String == "KITTEN2" {
@@ -158,7 +158,7 @@ public enum ImportValidator {
         switch info.fileType {
         case 42: notes.append("Format: lossless TQ2_1 (~1.03 GB). Requires KittenML's llama.cpp fork; stock llama.cpp cannot load it.")
         case 2: notes.append("Format: ternary Q4_0 (~1.45 GB).")
-        case 1: notes.append("Format: FP16 reference export (~3.47 GB upstream). Roughly 3 GB matches this export; it needs more memory than any iPhone comfortably offers alongside the decoder.")
+        case 1: notes.append("Format: FP16 reference export (~3.47 GB upstream). Its size makes it impractical to run in iPhone memory alongside the decoder.")
         default: notes.append("Quantization \(info.fileTypeName ?? "unknown") is not one of the exports documented by kitten-tts-2-cpp (TQ2_1, Q4_0, F16); third-party conversions are not guaranteed to work.")
         }
         if info.architecture == nil { notes.append("The GGUF's architecture could not be read, so it could not be confirmed as KittenTTS 2.") }

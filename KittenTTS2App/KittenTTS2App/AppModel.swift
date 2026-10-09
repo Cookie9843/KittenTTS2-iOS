@@ -89,7 +89,11 @@ final class AppModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
             case .success(let plan):
                 do {
                     let importer = ModelImporter(root: root)
+                    var lastPercent = -1
                     try importer.install(plan, progress: { value in
+                        let percent = Int(value * 100)
+                        guard percent != lastPercent else { return }
+                        lastPercent = percent
                         Task { @MainActor in self?.phase = .importing(value) }
                     }, isCancelled: { flag.isCancelled })
                     await self?.finishImport(success: plan)

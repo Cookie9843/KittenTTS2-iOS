@@ -69,13 +69,17 @@ public struct ModelImporter {
             do {
                 try fm.moveItem(at: staging, to: destination)
             } catch {
-                if hadOld { try? fm.moveItem(at: backup, to: destination) }
+                if hadOld {
+                    do { try fm.moveItem(at: backup, to: destination) } catch let restoreError {
+                        throw ImportError.io("could not install the new files (\(error.localizedDescription)) and could not restore the previous install (\(restoreError.localizedDescription)); the previous files are in \(backup.path)")
+                    }
+                }
                 throw error
             }
             try? fm.removeItem(at: backup)
         } catch {
             try? fm.removeItem(at: staging)
-            throw ImportError.io(error.localizedDescription)
+            throw error as? ImportError ?? ImportError.io(error.localizedDescription)
         }
         progress(1)
         return destination
