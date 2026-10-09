@@ -24,7 +24,7 @@ xcodebuild \
   -destination "generic/platform=iOS" \
   -derivedDataPath "$OUT/DerivedData" \
   CODE_SIGNING_ALLOWED=NO \
-  GCC_PREPROCESSOR_DEFINITIONS="KT_NATIVE_LINKED=1" \
+  GCC_PREPROCESSOR_DEFINITIONS='$(inherited) KT_NATIVE_LINKED=1' \
   AUDIOCPP_SOURCE_ROOT="$SRC" \
   OTHER_LDFLAGS="$LDFLAGS" \
   build
