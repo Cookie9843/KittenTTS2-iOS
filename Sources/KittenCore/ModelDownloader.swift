@@ -53,6 +53,12 @@ public struct DownloadProgress: Equatable, Sendable {
     public var bytes: Int64
     public var total: Int64
     public var fraction: Double { total > 0 ? min(1, Double(bytes) / Double(total)) : 0 }
+
+    public init(stage: Stage, bytes: Int64, total: Int64) {
+        self.stage = stage
+        self.bytes = bytes
+        self.total = total
+    }
 }
 
 public final class ModelDownloader: @unchecked Sendable {
