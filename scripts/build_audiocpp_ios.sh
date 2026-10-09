@@ -71,7 +71,7 @@ echo "== compile audio.cpp C ABI facade =="
 LAST_STEP="compile capi"
 mkdir -p "$WORK/capi"
 xcrun --sdk iphoneos clang++ -c -std=c++17 -O2 -arch arm64 -isysroot "$SDK" -miphoneos-version-min=$MINOS \
-  -I"$SRC/include" -DAUDIOCPP_VERSION_STRING="\"ios-test-${AUDIOCPP_REF:0:7}\"" \
+  -I"$SRC/include" -I"$SRC/external/ggml/include" -DAUDIOCPP_VERSION_STRING="\"ios-test-${AUDIOCPP_REF:0:7}\"" \
   "$SRC/src/capi/audiocpp.cpp" -o "$WORK/capi/audiocpp.o" 2>&1 | tee "$LOG_DIR/capi.log"
 
 echo "== artifacts =="
