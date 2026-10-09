@@ -1,6 +1,7 @@
 name: Build Unsigned IPA
 
 on:
+  pull_request:
   workflow_dispatch:
   push:
     branches:
@@ -10,7 +11,16 @@ permissions:
   contents: read
 
 jobs:
+  test:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: swift test
+        run: swift test
+
   build:
+    needs: test
     runs-on: macos-latest
     timeout-minutes: 45
 
