@@ -1,10 +1,13 @@
 import SwiftUI
 
 @main
-struct KittenTTS2App: App {
+struct KittenTTSApp: App {
+    @StateObject private var model = SpeechViewModel()
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(model)
         }
     }
 }

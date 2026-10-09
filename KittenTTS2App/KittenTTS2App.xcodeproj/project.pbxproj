@@ -8,17 +8,43 @@
 /* Begin PBXBuildFile section */
 		A10000000000000000000001 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* App.swift */; };
 		A10000000000000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* ContentView.swift */; };
+		A10000000000000000000003 /* SpeechViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000003 /* SpeechViewModel.swift */; };
+		A10000000000000000000004 /* AudioPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* AudioPlayer.swift */; };
+		A10000000000000000000005 /* GenerationHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* GenerationHistory.swift */; };
+		A10000000000000000000006 /* ModelValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* ModelValidator.swift */; };
+		A10000000000000000000007 /* ModelVariant.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000007 /* ModelVariant.swift */; };
+		A10000000000000000000008 /* TextInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000008 /* TextInput.swift */; };
+		A10000000000000000000009 /* VoiceCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000009 /* VoiceCatalog.swift */; };
+		A10000000000000000000010 /* WAVEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010 /* WAVEncoder.swift */; };
+		A10000000000000000000011 /* ZipDirectory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000011 /* ZipDirectory.swift */; };
+		A10000000000000000000100 /* KittenTTS in Frameworks */ = {isa = PBXBuildFile; productRef = AD0000000000000000000001 /* KittenTTS */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		A20000000000000000000001 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
 		A20000000000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		A20000000000000000000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		A20000000000000000000004 /* KittenTTS2App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KittenTTS2App.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A20000000000000000000003 /* SpeechViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechViewModel.swift; sourceTree = "<group>"; };
+		A20000000000000000000004 /* AudioPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayer.swift; sourceTree = "<group>"; };
+		A20000000000000000000005 /* GenerationHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationHistory.swift; sourceTree = "<group>"; };
+		A20000000000000000000006 /* ModelValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelValidator.swift; sourceTree = "<group>"; };
+		A20000000000000000000007 /* ModelVariant.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelVariant.swift; sourceTree = "<group>"; };
+		A20000000000000000000008 /* TextInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextInput.swift; sourceTree = "<group>"; };
+		A20000000000000000000009 /* VoiceCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceCatalog.swift; sourceTree = "<group>"; };
+		A20000000000000000000010 /* WAVEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WAVEncoder.swift; sourceTree = "<group>"; };
+		A20000000000000000000011 /* ZipDirectory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZipDirectory.swift; sourceTree = "<group>"; };
+		A20000000000000000000100 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A20000000000000000000101 /* KittenTTS2App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KittenTTS2App.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		A30000000000000000000001 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A30000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000100 /* KittenTTS in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -35,14 +61,33 @@
 			children = (
 				A20000000000000000000001 /* App.swift */,
 				A20000000000000000000002 /* ContentView.swift */,
-				A20000000000000000000003 /* Info.plist */,
+				A20000000000000000000003 /* SpeechViewModel.swift */,
+				A20000000000000000000004 /* AudioPlayer.swift */,
+				A40000000000000000000004 /* Core */,
+				A20000000000000000000100 /* Info.plist */,
 			);
 			path = KittenTTS2App;
 			sourceTree = "<group>";
 		};
+		A40000000000000000000004 /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000005 /* GenerationHistory.swift */,
+				A20000000000000000000006 /* ModelValidator.swift */,
+				A20000000000000000000007 /* ModelVariant.swift */,
+				A20000000000000000000008 /* TextInput.swift */,
+				A20000000000000000000009 /* VoiceCatalog.swift */,
+				A20000000000000000000010 /* WAVEncoder.swift */,
+				A20000000000000000000011 /* ZipDirectory.swift */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
 		A40000000000000000000003 /* Products */ = {
 			isa = PBXGroup;
-			children = (A20000000000000000000004 /* KittenTTS2App.app */, );
+			children = (
+				A20000000000000000000101 /* KittenTTS2App.app */,
+			);
 			name = Products;
 			sourceTree = "<group>";
 		};
@@ -51,59 +96,186 @@
 /* Begin PBXNativeTarget section */
 		A50000000000000000000001 /* KittenTTS2App */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A80000000000000000000002 /* Build configuration list for PBXNativeTarget */;
+			buildConfigurationList = A80000000000000000000002 /* Build configuration list for PBXNativeTarget "KittenTTS2App" */;
 			buildPhases = (
-				A30000000000000000000001 /* Frameworks */,
 				A60000000000000000000001 /* Sources */,
+				A30000000000000000000001 /* Frameworks */,
 				A70000000000000000000001 /* Resources */,
 			);
-			buildRules = ();
-			dependencies = ();
+			buildRules = (
+			);
+			dependencies = (
+			);
 			name = KittenTTS2App;
+			packageProductDependencies = (
+				AD0000000000000000000001 /* KittenTTS */,
+			);
 			productName = KittenTTS2App;
-			productReference = A20000000000000000000004 /* KittenTTS2App.app */;
+			productReference = A20000000000000000000101 /* KittenTTS2App.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
 
-/* Begin PBXSourcesBuildPhase section */
-		A60000000000000000000001 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001 /* App.swift in Sources */, A10000000000000000000002 /* ContentView.swift in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
-/* End PBXSourcesBuildPhase section */
-
-/* Begin PBXResourcesBuildPhase section */
-		A70000000000000000000001 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-/* End PBXResourcesBuildPhase section */
-
 /* Begin PBXProject section */
 		A90000000000000000000001 /* Project object */ = {
 			isa = PBXProject;
-			attributes = {LastUpgradeCheck = 1600; TargetAttributes = {A50000000000000000000001 = {CreatedOnToolsVersion = 16.0; }; }; };
-			buildConfigurationList = A80000000000000000000001 /* Build configuration list for PBXProject */;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					A50000000000000000000001 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+				};
+			};
+			buildConfigurationList = A80000000000000000000001 /* Build configuration list for PBXProject "KittenTTS2App" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
-			knownRegions = (en, Base, );
+			knownRegions = (
+				en,
+				Base,
+			);
 			mainGroup = A40000000000000000000001;
+			packageReferences = (
+				AC0000000000000000000001 /* XCRemoteSwiftPackageReference "KittenTTS-swift" */,
+			);
 			productRefGroup = A40000000000000000000003 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
-			targets = (A50000000000000000000001 /* KittenTTS2App */, );
+			targets = (
+				A50000000000000000000001 /* KittenTTS2App */,
+			);
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		A70000000000000000000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A60000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000001 /* App.swift in Sources */,
+				A10000000000000000000002 /* ContentView.swift in Sources */,
+				A10000000000000000000003 /* SpeechViewModel.swift in Sources */,
+				A10000000000000000000004 /* AudioPlayer.swift in Sources */,
+				A10000000000000000000005 /* GenerationHistory.swift in Sources */,
+				A10000000000000000000006 /* ModelValidator.swift in Sources */,
+				A10000000000000000000007 /* ModelVariant.swift in Sources */,
+				A10000000000000000000008 /* TextInput.swift in Sources */,
+				A10000000000000000000009 /* VoiceCatalog.swift in Sources */,
+				A10000000000000000000010 /* WAVEncoder.swift in Sources */,
+				A10000000000000000000011 /* ZipDirectory.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
 /* Begin XCBuildConfiguration section */
-		AB0000000000000000000001 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 16.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; }; name = Debug; };
-		AB0000000000000000000002 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 16.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; }; name = Release; };
-		AB0000000000000000000003 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = KittenTTS2App/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 16.0; PRODUCT_BUNDLE_IDENTIFIER = com.cookie9843.KittenTTS2App; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Debug; };
-		AB0000000000000000000004 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = KittenTTS2App/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 16.0; PRODUCT_BUNDLE_IDENTIFIER = com.cookie9843.KittenTTS2App; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
+		AB0000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		AB0000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		AB0000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = KittenTTS2App/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.cookie9843.KittenTTS2App;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		AB0000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = KittenTTS2App/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.cookie9843.KittenTTS2App;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		A80000000000000000000001 /* Build configuration list for PBXProject */ = {isa = XCConfigurationList; buildConfigurations = (AB0000000000000000000001 /* Debug */, AB0000000000000000000002 /* Release */, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-		A80000000000000000000002 /* Build configuration list for PBXNativeTarget */ = {isa = XCConfigurationList; buildConfigurations = (AB0000000000000000000003 /* Debug */, AB0000000000000000000004 /* Release */, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		A80000000000000000000001 /* Build configuration list for PBXProject "KittenTTS2App" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AB0000000000000000000001 /* Debug */,
+				AB0000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A80000000000000000000002 /* Build configuration list for PBXNativeTarget "KittenTTS2App" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AB0000000000000000000003 /* Debug */,
+				AB0000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
-		A90000000000000000000002 /* Project configuration list marker */ = {isa = PBXGroup; children = ();};
+/* Begin XCRemoteSwiftPackageReference section */
+		AC0000000000000000000001 /* XCRemoteSwiftPackageReference "KittenTTS-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/KittenML/KittenTTS-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.1.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AD0000000000000000000001 /* KittenTTS */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AC0000000000000000000001 /* XCRemoteSwiftPackageReference "KittenTTS-swift" */;
+			productName = KittenTTS;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A90000000000000000000001 /* Project object */;
 }

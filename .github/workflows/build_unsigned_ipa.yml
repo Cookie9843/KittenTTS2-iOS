@@ -2,6 +2,7 @@ name: Build Unsigned IPA
 
 on:
   workflow_dispatch:
+  pull_request:
   push:
     branches:
       - main
@@ -10,7 +11,19 @@ permissions:
   contents: read
 
 jobs:
+  test:
+    runs-on: macos-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run unit tests
+        run: swift test
+
   build:
+    needs: test
     runs-on: macos-latest
     timeout-minutes: 45
 
@@ -34,7 +47,11 @@ jobs:
         run: |
           set -euo pipefail
           APP_PATH="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphoneos/KittenTTS2App.app"
-          test -d "$APP_PATH"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "Expected app at $APP_PATH; found:" >&2
+            find "$RUNNER_TEMP/DerivedData/Build/Products" -maxdepth 2 >&2 || true
+            exit 1
+          fi
 
           mkdir -p "$RUNNER_TEMP/ipa/Payload"
           cp -R "$APP_PATH" "$RUNNER_TEMP/ipa/Payload/"

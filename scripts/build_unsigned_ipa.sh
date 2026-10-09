@@ -5,7 +5,8 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT_PATH="$PROJECT_DIR/KittenTTS2App/KittenTTS2App.xcodeproj"
 SCHEME="KittenTTS2App"
 CONFIGURATION="Release"
-APP_OUTPUT_DIR="$PROJECT_DIR/build/Release-iphoneos"
+DERIVED_DATA="$PROJECT_DIR/build/DerivedData"
+APP_OUTPUT_DIR="$DERIVED_DATA/Build/Products/$CONFIGURATION-iphoneos"
 IPA_OUTPUT="$PROJECT_DIR/build/KittenTTS2App-unsigned.ipa"
 
 if ! command -v xcodebuild >/dev/null 2>&1; then
@@ -20,6 +21,7 @@ xcodebuild \
   -scheme "$SCHEME" \
   -configuration "$CONFIGURATION" \
   -destination 'generic/platform=iOS' \
+  -derivedDataPath "$DERIVED_DATA" \
   CODE_SIGNING_ALLOWED=NO \
   CODE_SIGN_STYLE=Automatic \
   build
@@ -30,7 +32,7 @@ if [ ! -d "$APP_PATH" ]; then
   exit 1
 fi
 
-rm -rf "$PROJECT_DIR/build/unsigned_payload"
+rm -rf "$PROJECT_DIR/build/unsigned_payload" "$IPA_OUTPUT"
 mkdir -p "$PROJECT_DIR/build/unsigned_payload/Payload"
 cp -R "$APP_PATH" "$PROJECT_DIR/build/unsigned_payload/Payload/"
 
