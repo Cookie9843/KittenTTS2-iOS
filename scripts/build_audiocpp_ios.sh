@@ -10,6 +10,7 @@ AUDIOCPP_REF="${AUDIOCPP_REF:-ad1473cd460177480e8a0dc625bd46f76ea49aae}"
 WORK="${WORK:-$(mktemp -d)}"
 LOG_DIR="${LOG_DIR:-$WORK/logs}"
 JOBS="${JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || echo 4)}"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC="$WORK/src"
 BLD="$WORK/build"
 SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
@@ -53,6 +54,7 @@ LAST_STEP="configure"
 cmake -G "$GENERATOR" ${CCACHE_ARGS[@]+"${CCACHE_ARGS[@]}"} -S "$SRC" -B "$BLD" \
   -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphoneos -DCMAKE_OSX_ARCHITECTURES=arm64 \
   -DCMAKE_OSX_DEPLOYMENT_TARGET=$MINOS -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_PROJECT_INCLUDE="$ROOT/scripts/cmake/ios_stubs.cmake" \
   -DAUDIOCPP_MODEL_SET=custom -DAUDIOCPP_MODELS=kitten_tts2 \
   -DENGINE_ENABLE_CUDA=OFF -DENGINE_ENABLE_HIP=OFF -DENGINE_ENABLE_VULKAN=OFF -DENGINE_ENABLE_METAL=OFF \
   -DENGINE_ENABLE_OPENMP=OFF -DGGML_OPENMP=OFF -DENGINE_ENABLE_NATIVE_CPU=OFF \

@@ -13,6 +13,7 @@ on:
       - Sources/KittenCore/WAVEncoder.swift
       - scripts/build_audiocpp_ios.sh
       - scripts/build_audiocpp_test_ipa.sh
+      - scripts/cmake/**
       - THIRD_PARTY_NOTICES.md
       - .github/workflows/ios_audiocpp_kitten2.yml
   push:
@@ -22,6 +23,7 @@ on:
       - NativeAudioCpp/**
       - scripts/build_audiocpp_ios.sh
       - scripts/build_audiocpp_test_ipa.sh
+      - scripts/cmake/**
       - .github/workflows/ios_audiocpp_kitten2.yml
 
 permissions:
