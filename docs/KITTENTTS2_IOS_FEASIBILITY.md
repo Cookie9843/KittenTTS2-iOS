@@ -12,7 +12,8 @@
 ## Seams and their status
 | Seam | Status |
 | --- | --- |
-| Custom llama.cpp fork (TQ2_1) for iOS arm64 | **Unverified.** `scripts/probe_ios_native.sh` + workflow `iOS native probe (experimental)` try to cross-compile `libllama`/`ggml` on a macOS runner (no Metal, no signing). Check that workflow's latest run for the result; a green run proves only that static libs build, not that a model loads or runs. |
+| Custom llama.cpp fork (TQ2_1) for iOS arm64 | **Cross-compiles** (probe run #4, `c970cb6`, actions run 37960445167): the build reached `[202/202]`, the script's final verification ran and printed `RESULT:`, exit code 0 after 109 s, and `libllama.a`, `libggml.a`, `libggml-cpu.a`, `libggml-base.a` were all arm64. The job's green status is not evidence by itself (the old job had `continue-on-error`, now removed; the workflow now also greps for `RESULT:`). **On-device load/inference is still unverified.** |
+| Native load probe app (`NativeProbe/`, `scripts/build_native_probe_ipa.sh`) | **Built in CI as an unsigned IPA, not yet run on a device.** Links exactly the fork-built static libs; reads a user-supplied GGUF header (counts `TQ2_1` tensors) and loads it with the fork's `llama_model_load_from_file`, then tokenizes a fixed string. No context, no inference, no audio, no Generate button. |
 | Swift ↔ C bridge | **Done (stub).** `Sources/CKittenBridge` exposes ABI version, per-component capabilities and `kitten_bridge_generate`, which refuses (`ERR_UNAVAILABLE`, 0 samples) unless every component is linked. `KittenRuntime` protocol + `NativeKittenRuntime` wrap it; tests use a mock. |
 | `decoder.pt` execution on iOS | **Blocked / unverified.** Full TorchScript (`torch::jit::load`) needs desktop LibTorch; no supported iOS build exists. PyTorch Mobile's lite interpreter loads `.ptl` files and is no longer maintained; TorchScript is deprecated; ExecuTorch would require re-exporting the S3 decoder (flow + vocoder) and proving operator coverage; a hand-port to Core ML/ggml is a large separate project. None has been attempted with real weights. JIT is not used as a workaround. |
 | Text normalizer | Pure C++17 submodule; expected portable, not yet built for iOS. |
@@ -29,6 +30,12 @@ Upstream sizes: TQ2_1 GGUF ≈ 1.03 GB, Q4_0 ≈ 1.45 GB, FP16 reference export 
 2. Models tab → KittenTTS 2 → choose `model-tq2_1.gguf`, `decoder.pt`, `voices.json`, `config.json`.
 3. Open the Models tab: the "Installed files" section shows the verification report, memory estimate and why generation is disabled. Please report that text, your iPad model and the real filenames/sizes.
 4. Remaining unverified: fork on-device load, decoder execution, normalizer, end-to-end audio.
+
+## Native load probe IPA (device test)
+Artifact `KittenTTS2NativeProbe-unsigned-ipa` of workflow *iOS native probe (experimental)*. It is **unsigned**: install requires re-signing with your own Apple ID/certificate and provisioning profile (e.g. Sideloadly, AltStore, or `zsign`/Xcode "Devices" with your free/paid developer account; bundle id `com.cookie9843.KittenTTS2NativeProbe` may need to be changed to one you own). No signing secrets are used or stored in this repo. Then: open the app, choose `model-tq2_1.gguf` (≈1.03 GB, from `cpp/` in `KittenML/kitten-tts-2`), tap "1. Read header", then "2. Load model" and report the text shown. A successful load proves only that the fork's TQ2_1 loader runs on the device; it does not prove speech works. No model assets are downloaded in CI.
+
+## Complete audio path assessment
+Still **not buildable** today: the decoder (`decoder.pt`, TorchScript via `torch::jit::load`) has no supported iOS runtime (no LibTorch-for-iOS full-JIT build; PyTorch Mobile is unmaintained and needs `.ptl`), and the S3 decoder would have to be re-exported (ExecuTorch/Core ML) and parity-checked against real weights, which cannot be done in CI without the model assets. The text normalizer is also unbuilt for iOS, and the sampling loop in upstream `main.cpp` is not ported. The app's Generate action therefore stays disabled.
 
 ## Next steps
 1. Read the probe workflow result; if green, add a tiny C++ shim loading a GGUF header via the fork and bump `KITTEN_BRIDGE_HAVE_LLAMA_FORK`/`TQ2_1` only after a device load test.
