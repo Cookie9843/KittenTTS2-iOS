@@ -34,8 +34,12 @@ test -d "$APP" || { echo "missing $APP" >&2; exit 1; }
 
 echo "== linked native symbols =="
 nm "$APP/$APPNAME" > "$OUT/app.syms"
-for sym in _audiocpp_model_load _audiocpp_session_run _kt_load _kt_synthesize _kt_synthesize_clone; do
+for sym in _audiocpp_model_load _audiocpp_session_run; do
   grep -q " T $sym\$" "$OUT/app.syms" || { echo "symbol $sym is not linked into the app" >&2; exit 1; }
+done
+# the Xcode app link localizes the bridge functions, so accept defined local text (t) as well as global (T)
+for sym in _kt_runtime_linked _kt_load _kt_synthesize _kt_synthesize_clone; do
+  grep -Eq " [Tt] $sym\$" "$OUT/app.syms" || { echo "symbol $sym is not linked into the app" >&2; exit 1; }
 done
 grep -q "make_kitten_tts2_loader" "$OUT/app.syms" || { echo "kitten_tts2 loader is not linked into the app" >&2; exit 1; }
 lipo -info "$APP/$APPNAME"
