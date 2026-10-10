@@ -81,4 +81,10 @@ public enum LegacyVariant: String, CaseIterable, Codable, Sendable, Identifiable
     public var voicesFileName: String { "voices.npz" }
 
     public var huggingFaceRepo: String { "KittenML/\(rawValue)" }
+
+    /// Official model page on Hugging Face (repo id comes from the same constant the downloader uses).
+    public var repositoryPage: URL { URL(string: "https://huggingface.co/\(huggingFaceRepo)")! }
+
+    /// Organisation page listing the original KittenTTS 0.8 repositories next to the newer ones.
+    public static let organizationPage = URL(string: "https://huggingface.co/KittenML")!
 }
