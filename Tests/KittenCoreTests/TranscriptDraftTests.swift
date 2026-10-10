@@ -75,7 +75,10 @@ final class TranscriptDraftTests: XCTestCase {
 
     func testReviewCueIsExplicit() {
         XCTAssertTrue(TranscriptCopy.reviewCue.contains("Review the transcript before generating"))
-        XCTAssertTrue(TranscriptCopy.reviewCue.contains("can be wrong"))
+        XCTAssertTrue(TranscriptCopy.reviewCue.contains("mishear words"))
+        XCTAssertTrue(TranscriptCopy.reviewCue.contains("punctuation"))
+        XCTAssertTrue(TranscriptCopy.reviewCue.contains("Listen to the reference clip"))
+        XCTAssertTrue(TranscriptCopy.reviewCue.contains("wording and the punctuation"))
         XCTAssertTrue(TranscriptCopy.privacyNote.contains("on this device"))
     }
 }

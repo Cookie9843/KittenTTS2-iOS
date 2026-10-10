@@ -11,6 +11,7 @@ final class AppModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
         case downloading(Double)
         case loading
         case generating
+        case removing
     }
 
     /// Files imported through the Models tab belong to the original 0.8 family (KittenTTS 2 is downloaded, not imported).
@@ -50,11 +51,16 @@ final class AppModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
 
     // MARK: Install state
 
+    private var legacyStore: LegacyModelStore { LegacyModelStore(root: modelRoot) }
+
     func isInstalled(_ variant: LegacyVariant) -> Bool {
         _ = installRevision
-        let dir = modelRoot.appendingPathComponent("legacy08/\(variant.rawValue)")
-        return FileManager.default.fileExists(atPath: dir.appendingPathComponent(variant.onnxFileName).path)
-            && FileManager.default.fileExists(atPath: dir.appendingPathComponent(variant.voicesFileName).path)
+        return legacyStore.isInstalled(variant)
+    }
+
+    func installedBytes(_ variant: LegacyVariant) -> Int64 {
+        _ = installRevision
+        return legacyStore.installedBytes(variant)
     }
 
     var canGenerate: Bool { isInstalled(legacyVariant) && !busy }
@@ -119,24 +125,73 @@ final class AppModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
 
     // MARK: Download (legacy only, explicit user action)
 
+    /// The original downloader cannot pause or resume (it restarts a file from byte 0 and ignores task cancellation), so only
+    /// cancel is offered. A cancelled download lets the file already in flight finish (they are 25–80 MB), then removes
+    /// everything that download wrote. A model that was installed before is never touched.
+    @Published private(set) var legacyCancelling = false
+    private var downloadCancel: CancelFlag?
+
     func downloadLegacy() {
         guard !busy else { return }
         let variant = legacyVariant
+        let store = legacyStore
+        let wasInstalled = store.isInstalled(variant)
+        let flag = CancelFlag()
+        downloadCancel = flag
+        legacyCancelling = false
         phase = .downloading(0)
         post("Downloading \(variant.huggingFaceRepo) from Hugging Face…", for: .modelSetup)
         Task {
+            var failure: Error?
             do {
                 _ = try await engine(for: variant) { value in
-                    Task { @MainActor in self.phase = .downloading(value) }
+                    Task { @MainActor in
+                        guard self.downloadCancel === flag, !flag.isCancelled, case .downloading = self.phase else { return }
+                        self.phase = .downloading(value)
+                    }
                 }
-                phase = .idle
-                installRevision += 1
-                post("\(variant.displayName) is ready.", for: .modelSetup)
-            } catch {
-                phase = .idle
-                post("Download failed: \(error.localizedDescription)", for: .modelSetup, error: true)
+            } catch { failure = error }
+            // The engine of a cancelled or failed download must not stay cached: its files are about to be removed.
+            if failure != nil || flag.isCancelled { engines[variant] = nil }
+            let outcome = store.finishDownload(variant, wasInstalledBefore: wasInstalled, cancelled: flag.isCancelled)
+            if downloadCancel === flag { downloadCancel = nil }
+            legacyCancelling = false
+            phase = .idle
+            installRevision += 1
+            switch outcome {
+            case _ where flag.isCancelled && outcome != .discarded:
+                post("Download cancelled. Your installed model was kept.", for: .modelSetup)
+            case .discarded: post("Download cancelled. The partial files were removed.", for: .modelSetup)
+            case .installed:
+                if let failure { post("The files were downloaded, but the model could not be loaded: \(failure.localizedDescription)", for: .modelSetup, error: true) }
+                else { post("\(variant.displayName) is ready.", for: .modelSetup) }
+            default:
+                let reason = failure?.localizedDescription ?? "the files are incomplete"
+                post("Download failed: \(reason). Partial files were removed; you can try again.", for: .modelSetup, error: true)
             }
         }
+    }
+
+    func cancelLegacyDownload() {
+        guard case .downloading = phase, let flag = downloadCancel, !flag.isCancelled else { return }
+        flag.cancel()
+        legacyCancelling = true
+        post("Cancelling… the file that is already transferring finishes first, then everything from this download is removed.", for: .modelSetup)
+    }
+
+    /// Releases the cached engine (it has the ONNX file open) before the files are removed, and blocks every other action meanwhile.
+    func deleteLegacy(_ variant: LegacyVariant) {
+        guard !busy else { return }
+        phase = .removing
+        engines[variant] = nil
+        do {
+            try legacyStore.delete(variant)
+            post("\(variant.displayName) was removed from this device.", for: .modelSetup)
+        } catch {
+            post(error.localizedDescription, for: .modelSetup, error: true)
+        }
+        phase = .idle
+        installRevision += 1
     }
 
     private func engine(for variant: LegacyVariant, progress: ((Double) -> Void)? = nil) async throws -> KittenTTS {

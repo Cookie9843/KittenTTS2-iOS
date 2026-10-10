@@ -459,7 +459,7 @@ struct CloneVoiceView: View {
             }
             if k2.transcriptDraft.needsReview {
                 Button { transcriptFocused = false; k2.confirmTranscript() } label: {
-                    Label("It matches what is said", systemImage: "checkmark.circle")
+                    Label("Words and punctuation are correct", systemImage: "checkmark.circle")
                 }
                 .buttonStyle(.borderedProminent)
             }
@@ -484,6 +484,7 @@ struct ModelsView: View {
     @State private var pickingKitten2 = false
     @State private var confirmDelete = false
     @State private var confirmDiscard = false
+    @State private var confirmDeleteLegacy = false
 
     private static let ggufType = UTType(filenameExtension: "gguf") ?? .data
 
@@ -498,6 +499,10 @@ struct ModelsView: View {
             .sheet(isPresented: $k2.showDownloadConfirmation) { DownloadConsentView() }
             .confirmationDialog("Remove KittenTTS 2 from this device?", isPresented: $confirmDelete, titleVisibility: .visible) {
                 Button("Remove", role: .destructive) { k2.deleteModel() }
+                Button("Keep", role: .cancel) {}
+            } message: { Text("You can download or import it again later.") }
+            .confirmationDialog("Remove \(app.legacyVariant.displayName) from this device?", isPresented: $confirmDeleteLegacy, titleVisibility: .visible) {
+                Button("Remove", role: .destructive) { app.deleteLegacy(app.legacyVariant) }
                 Button("Keep", role: .cancel) {}
             } message: { Text("You can download or import it again later.") }
             .confirmationDialog("Remove the partial download?", isPresented: $confirmDiscard, titleVisibility: .visible) {
@@ -602,7 +607,8 @@ struct ModelsView: View {
                 ForEach(LegacyVariant.allCases) { Text($0.displayName).tag($0) }
             }
             if app.isInstalled(app.legacyVariant) {
-                Label("Ready on this device", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                Label("Ready on this device (\(ByteCountFormatter.string(fromByteCount: app.installedBytes(app.legacyVariant), countStyle: .file)))", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                Button("Remove from this device", role: .destructive) { confirmDeleteLegacy = true }.disabled(app.busy)
             } else {
                 Button("Download \(app.legacyVariant.displayName)") { app.downloadLegacy() }.disabled(app.busy)
                 Text("Downloaded from huggingface.co/\(app.legacyVariant.huggingFaceRepo).").font(.footnote).foregroundStyle(.secondary)
@@ -610,10 +616,16 @@ struct ModelsView: View {
             Button("Import files you already have…") { pickingLegacy = true }.disabled(app.busy)
             switch app.phase {
             case .importing(let p): ProgressView("Importing…", value: p)
-            case .downloading(let p): ProgressView("Downloading…", value: p)
+            case .downloading(let p): ProgressView(app.legacyCancelling ? "Cancelling…" : "Downloading…", value: p)
+            case .removing: ProgressView("Removing…")
             default: EmptyView()
             }
             if case .importing = app.phase { Button("Cancel import", role: .destructive) { app.cancelCurrentImport() } }
+            if case .downloading = app.phase {
+                Button("Cancel download and remove partial files", role: .destructive) { app.cancelLegacyDownload() }.disabled(app.legacyCancelling)
+                Text("This downloader cannot pause. Cancelling lets the file already in progress finish, then removes everything from this download.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
             MessageView(app.status[.modelSetup])
             Text("Pick the .onnx model and its voices.npz together from the matching KittenML/kitten-tts-*-0.8 repository.")
                 .font(.footnote).foregroundStyle(.secondary)

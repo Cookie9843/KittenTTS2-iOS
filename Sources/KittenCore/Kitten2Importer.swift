@@ -52,6 +52,14 @@ public enum Kitten2Library {
         try? FileManager.default.removeItem(at: installDirectory.appendingPathComponent(importedRecordName))
     }
 
+    /// Removes every KittenTTS 2 file this app stores: the downloaded package, any partial download or half-finished import in
+    /// the staging folder, and the imported file with its record. The caller must unload the speech engine first.
+    public static func deleteAll(installDirectory: URL, stagingDirectory: URL) {
+        InstalledModels.delete(Kitten2Package.file, installDirectory: installDirectory, stagingDirectory: stagingDirectory)
+        try? FileManager.default.removeItem(at: stagingDirectory.appendingPathComponent("import.partial"))
+        deleteImported(in: installDirectory)
+    }
+
     static func fileSize(_ url: URL) -> Int64? {
         ((try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? NSNumber)?.int64Value
     }
@@ -67,6 +75,13 @@ public enum Kitten2ImportError: Error, Equatable, LocalizedError {
     case fileSystem(String)
     case cancelled
 
+    /// Plain-language description of a low-level error plus its domain and code, so an unexpected failure can be told apart
+    /// from another one instead of collapsing into a generic message.
+    public static func detail(_ error: Error) -> String {
+        let ns = error as NSError
+        return "\(error.localizedDescription) [\(ns.domain) \(ns.code)]"
+    }
+
     public var errorDescription: String? {
         let fmt = { (b: Int64) in ByteCountFormatter.string(fromByteCount: b, countStyle: .file) }
         switch self {
@@ -76,7 +91,7 @@ public enum Kitten2ImportError: Error, Equatable, LocalizedError {
         case .insufficientDisk(let need, let have):
             return "Not enough free storage to import: \(fmt(need)) is needed (a copy of the file plus working space), but only \(fmt(have)) is available. Free up at least \(fmt(max(0, need - have))) and try again. Your current model was not changed."
         case .checksumMismatch: return "The file has the size of the published KittenTTS 2 package but its SHA-256 does not match, so it is damaged or modified and was not imported."
-        case .fileSystem(let m): return "Could not import the file: \(m). Your current model was not changed."
+        case .fileSystem(let m): return "Could not import the file: \(m). Your current model was not changed. You can try again."
         case .cancelled: return "Import cancelled. Your current model was not changed."
         }
     }
@@ -110,7 +125,7 @@ public struct Kitten2Importer: Sendable {
         catch let error as AudioCppGGUFInspector.InspectError {
             if error == .notGGUF { throw Kitten2ImportError.notGGUF("KittenTTS 2 needs the single .gguf package \(AudioCppPackage.publishedFileName) from \(AudioCppPackage.sourceRepository).") }
             throw Kitten2ImportError.unsupported(error.description)
-        } catch { throw Kitten2ImportError.unreadable(error.localizedDescription) }
+        } catch { throw Kitten2ImportError.unreadable("the header could not be read (\(Kitten2ImportError.detail(error)))") }
 
         let validation = AudioCppGGUFInspector.validate(report, publishedSize: published.size)
         guard validation.kind == .audiocppKittenTTS2, validation.passed else {
@@ -130,18 +145,18 @@ public struct Kitten2Importer: Sendable {
             try? fm.removeItem(at: partial)
             guard fm.createFile(atPath: partial.path, contents: nil) else { throw Kitten2ImportError.fileSystem("the staging file could not be created") }
         } catch let error as Kitten2ImportError { throw error }
-        catch { throw Kitten2ImportError.fileSystem(error.localizedDescription) }
+        catch { throw Kitten2ImportError.fileSystem("the staging folder could not be prepared (\(Kitten2ImportError.detail(error)))") }
 
         var succeeded = false
         defer { if !succeeded { try? fm.removeItem(at: partial) } }
 
         var hasher = SHA256Hasher()
+        var copied: Int64 = 0
         do {
             let input = try FileHandle(forReadingFrom: source)
             defer { try? input.close() }
             let output = try FileHandle(forWritingTo: partial)
             defer { try? output.close() }
-            var copied: Int64 = 0
             while let chunk = try input.read(upToCount: Self.chunkSize), !chunk.isEmpty {
                 if isCancelled() { throw Kitten2ImportError.cancelled }
                 try output.write(contentsOf: chunk)
@@ -149,9 +164,10 @@ public struct Kitten2Importer: Sendable {
                 copied += Int64(chunk.count)
                 progress(min(1, Double(copied) / Double(size)))
             }
-            guard copied == size else { throw Kitten2ImportError.fileSystem("the file changed while it was being copied") }
+            guard copied == size else { throw Kitten2ImportError.fileSystem("the file changed while it was being copied (\(copied) of \(size) bytes were read)") }
         } catch let error as Kitten2ImportError { throw error }
-        catch { throw Kitten2ImportError.fileSystem(error.localizedDescription) }
+        catch { throw Kitten2ImportError.fileSystem("copying stopped after \(copied) of \(size) bytes (\(Kitten2ImportError.detail(error)))") }
+        if isCancelled() { throw Kitten2ImportError.cancelled }
 
         let digest = hasher.finalizeHex()
         let verified = size == published.size && digest == published.sha256
@@ -159,21 +175,21 @@ public struct Kitten2Importer: Sendable {
 
         let record = Kitten2ImportRecord(originalName: source.lastPathComponent, size: size, sha256: digest, checksumVerified: verified, importedAt: Date())
         let destination = installDirectory.appendingPathComponent(Kitten2Library.importedFileName)
-        // A record that no longer describes the file must never outlive the replacement.
-        try? fm.removeItem(at: installDirectory.appendingPathComponent(Kitten2Library.importedRecordName))
+        let recordURL = installDirectory.appendingPathComponent(Kitten2Library.importedRecordName)
+        // The previous file and its record stay untouched until the new file is in place; only then is the old record replaced.
         do {
             if fm.fileExists(atPath: destination.path) { _ = try fm.replaceItemAt(destination, withItemAt: partial) }
             else { try fm.moveItem(at: partial, to: destination) }
             succeeded = true
-            var values = URLResourceValues(); values.isExcludedFromBackup = true
-            var mutable = destination
-            try? mutable.setResourceValues(values)
-        } catch { throw Kitten2ImportError.fileSystem(error.localizedDescription) }
+        } catch { throw Kitten2ImportError.fileSystem("the verified copy could not be moved into place (\(Kitten2ImportError.detail(error)))") }
+        var values = URLResourceValues(); values.isExcludedFromBackup = true
+        var mutable = destination
+        try? mutable.setResourceValues(values)
 
+        // A record that no longer describes the file must never outlive the replacement.
+        try? fm.removeItem(at: recordURL)
         let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
-        if let data = try? encoder.encode(record) {
-            try? data.write(to: installDirectory.appendingPathComponent(Kitten2Library.importedRecordName), options: .atomic)
-        }
+        if let data = try? encoder.encode(record) { try? data.write(to: recordURL, options: .atomic) }
         return record
     }
 }
