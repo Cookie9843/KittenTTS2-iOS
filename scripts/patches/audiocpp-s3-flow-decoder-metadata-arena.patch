@@ -1,0 +1,37 @@
+diff --git a/src/models/chatterbox/s3gen_flow.cpp b/src/models/chatterbox/s3gen_flow.cpp
+index 9193f9b..ac3825c 100644
+--- a/src/models/chatterbox/s3gen_flow.cpp
++++ b/src/models/chatterbox/s3gen_flow.cpp
+@@ -34,6 +34,14 @@ size_t metadata_arena_bytes(size_t requested_bytes, size_t graph_nodes) {
+     return std::min(requested_bytes, bound);
+ }
+ 
++// The flow decoder keeps its graph context (and, with it, this arena) alive in the session cache between requests, so
++// the unbounded 512 MiB reservation made the next request's ggml_init() fail on memory-constrained devices. The graph
++// has 1 + 12 + 1 blocks of 4 transformers plus 14 resnets: roughly 50 nodes per transformer and resnet block, i.e.
++// ~4k nodes (estimated from the code, not measured). The topology does not depend on the frame count; only the
++// batch (<= 2 for classifier-free guidance) adds per-sample conv slices. 32768 leaves a >5x margin; exceeding it
++// would hit ggml's graph-size assert (reported through the abort hook), not corrupt memory.
++constexpr size_t kDecoderGraphNodes = 32768;
++
+ S3FlowEncoderWeights::LayerNormWeights load_flow_layer_norm(
+     engine::core::BackendWeightStore & store,
+     const engine::assets::TensorSource & source,
+@@ -1469,7 +1477,7 @@ public:
+         cached_attention_mask_values_.clear();
+ 
+         ggml_init_params params = {};
+-        params.mem_size = 512ull * 1024ull * 1024ull;
++        params.mem_size = metadata_arena_bytes(512ull * 1024ull * 1024ull, kDecoderGraphNodes);
+         params.mem_buffer = nullptr;
+         params.no_alloc = true;
+         graph_ggml_ = ggml_init(params);
+@@ -1554,7 +1562,7 @@ public:
+         output_tensor_ = causal_conv1d_bct(ctx, hidden_bct, weights.final_proj, writer);
+         ggml_set_output(output_tensor_.tensor);
+ 
+-        graph_ = ggml_new_graph_custom(graph_ggml_, 262144, false);
++        graph_ = ggml_new_graph_custom(graph_ggml_, kDecoderGraphNodes, false);
+         ggml_build_forward_expand(graph_, output_tensor_.tensor);
+         gallocr_ = ggml_gallocr_new(ggml_backend_get_default_buffer_type(backend_));
+         if (gallocr_ == nullptr ||

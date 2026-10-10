@@ -28,9 +28,8 @@ Each operation owns its message (`OperationStatus`): model download, model impor
 | Download manifest, SHA-256/size verification, resume, atomic install, import validation, storage rules, status scoping, clone input rules, WAV decoding | `swift test` (Linux, mock transport and fixtures; no real Hugging Face traffic) |
 | The app UI and native runtime compile and link for iOS | CI only; see the workflow run for the commit (the UI code cannot be built on Linux) |
 | KittenTTS 2 load + preset synthesis on real hardware | **Observed on one iPad (iPad16,5, iOS 27.0), not CI:** load 10.55 s, 75,360 samples at 24 kHz in 7.42 s, 2.52 GB reported available. Other devices are unverified; resources vary and iOS may terminate the app |
-| Voice cloning on device | Not verified on any device |
-| Import flow and storage fix on device | Not verified on a device by this change |
-| KittenTTS 0.8 | Existing path, not re-verified on a device here |
+| Voice cloning, own-GGUF import, storage checks, KittenTTS 0.8 on device | **User-tested by Cookie9843** (their own device and setup; exact device/OS not recorded here for these flows). Not exercised by CI and not a claim about other devices, memory profiles, signing methods or locales |
+| Second and later generations on one loaded model | The failure `failed to initialize ggml graph context for S3 flow decoder` was reported on a device after the first generation. The fix (`scripts/patches/audiocpp-s3-flow-decoder-metadata-arena.patch`) comes from source analysis and CI build; **a repeated-generation retest on a device is still required**. `scripts/run_two_synth_probe.sh` runs two syntheses on one session when pointed at a local model |
 | macOS, Android | Not supported |
 
 The model is **never bundled** in the repository, CI or IPA. The published file is 3,282,123,776 bytes (3.28 GB, SHA-256 `e97920ca5053f9fcd4de638dcd8114ed2510d4291a93257473a8843c3ff349ad`). It is memory-mapped, so its size is not the same as resident memory, but devices with limited free memory may still fail; the app shows warnings based on `os_proc_available_memory`, not guarantees.
