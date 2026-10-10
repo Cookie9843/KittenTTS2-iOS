@@ -8,7 +8,7 @@ static const char *last_error = "";
 
 struct audiocpp_registry { int x; };
 struct audiocpp_model { int x; };
-struct audiocpp_session { int x; };
+struct audiocpp_session { char task[8]; };
 struct audiocpp_request { int has_audio; };
 struct audiocpp_result { float samples[8]; };
 
@@ -24,7 +24,7 @@ audiocpp_status audiocpp_model_load(audiocpp_registry *r, const char *p, const a
 void audiocpp_model_free(audiocpp_model *m) { if (m) fake.models--; free(m); }
 const char *audiocpp_model_family(const audiocpp_model *m) { (void)m; return "kitten_tts2"; }
 const char *audiocpp_model_description(const audiocpp_model *m) { (void)m; return "fake"; }
-int audiocpp_model_supports(const audiocpp_model *m, const char *task, const char *mode) { (void)m; (void)mode; return strcmp(task, "tts") == 0; }
+int audiocpp_model_supports(const audiocpp_model *m, const char *task, const char *mode) { (void)m; (void)mode; return strcmp(task, "tts") == 0 || strcmp(task, "clon") == 0; }
 audiocpp_status audiocpp_session_create(const audiocpp_model *m, const char *task, const char *mode, const audiocpp_backend_config *b, const audiocpp_options *o, audiocpp_session **out) {
     (void)m; (void)mode; (void)b; (void)o;
     if (fake.fail_next_session_create) {
@@ -34,16 +34,19 @@ audiocpp_status audiocpp_session_create(const audiocpp_model *m, const char *tas
     }
     strncpy(fake.last_session_task, task, sizeof fake.last_session_task - 1);
     *out = calloc(1, sizeof **out);
+    strncpy((*out)->task, task, sizeof (*out)->task - 1);
+    strncpy(fake.live_session_task, task, sizeof fake.live_session_task - 1);
+    if (strcmp(task, "tts") == 0) fake.tts_creates++; else fake.clon_creates++;
     fake.sessions++; fake.sessions_created++;
     if (fake.sessions > fake.peak_sessions) fake.peak_sessions = fake.sessions;
     return AUDIOCPP_OK;
 }
-void audiocpp_session_free(audiocpp_session *s) { if (s) fake.sessions--; free(s); }
+void audiocpp_session_free(audiocpp_session *s) { if (s) { fake.sessions--; fake.live_session_task[0] = 0; } free(s); }
 const char *audiocpp_session_family(const audiocpp_session *s) { (void)s; return "kitten_tts2"; }
 audiocpp_status audiocpp_session_run(audiocpp_session *s, const audiocpp_request *r, audiocpp_result **out) {
-    (void)s;
     *out = NULL;
     fake.runs++;
+    if (strcmp(s->task, r->has_audio ? "clon" : "tts") != 0) fake.task_mismatches++;
     if (r->has_audio) fake.clone_runs++;
     if (fake.fail_next_run) {
         fake.fail_next_run = 0;

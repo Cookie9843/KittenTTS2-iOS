@@ -40,9 +40,8 @@ int kt_synthesize(kt_engine *engine, const char *text, const char *voice_id, int
                   char *err, size_t err_cap);
 
 /* Voice cloning: `reference` is mono float PCM (1-30 s, `reference_rate` Hz) and `transcript` is what is said in it
- * (the runtime does not transcribe). Preset TTS and cloning share the engine's ONE long-lived "tts" session (the
- * kitten_tts2 session handles a request that carries reference audio as a clone), so alternating between them never
- * frees and re-creates the multi-GB weight set. Blocks until done; not interruptible. */
+ * (the runtime does not transcribe). Cloning runs on a "clon" session; preset TTS uses a "tts" session. Only one
+ * session is alive at a time: switching between them frees the previous session before creating the next. Blocks until done; not interruptible. */
 int kt_synthesize_clone(kt_engine *engine, const char *text, const float *reference, size_t reference_frames,
                         int reference_rate, const char *transcript, int64_t seed, kt_audio *out, char *err,
                         size_t err_cap);
