@@ -129,6 +129,136 @@ final class Kitten2ImporterTests: XCTestCase {
         XCTAssertNil(Kitten2Library.active(in: install))
     }
 
+    // MARK: Failure recovery (no relaunch)
+
+    func testRetryAfterCancelOnTheSameImporterSucceedsAndLeavesNoPartial() throws {
+        let data = fixtures.audiocppFixture()
+        let src = try write(data)
+        let sut = importer(published: published(data))
+        XCTAssertThrowsError(try sut.install(source: src, installDirectory: install, stagingDirectory: staging, isCancelled: { true })) {
+            XCTAssertEqual($0 as? Kitten2ImportError, .cancelled)
+        }
+        XCTAssertNil(Kitten2Library.active(in: install))
+        let record = try sut.install(source: src, installDirectory: install, stagingDirectory: staging)
+        XCTAssertTrue(record.checksumVerified)
+        XCTAssertEqual(try Data(contentsOf: install.appendingPathComponent(Kitten2Library.importedFileName)), data)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: staging.appendingPathComponent("import.partial").path))
+    }
+
+    func testRetryAfterSourceDisappearedSucceeds() throws {
+        let data = fixtures.audiocppFixture()
+        let src = try write(data)
+        let sut = importer(published: published(data))
+        try FileManager.default.removeItem(at: src)
+        XCTAssertThrowsError(try sut.install(source: src, installDirectory: install, stagingDirectory: staging)) {
+            guard case .unreadable? = $0 as? Kitten2ImportError else { return XCTFail("\($0)") }
+        }
+        _ = try write(data)
+        XCTAssertNoThrow(try sut.install(source: src, installDirectory: install, stagingDirectory: staging))
+        XCTAssertNotNil(Kitten2Library.imported(in: install))
+    }
+
+    func testStagingProblemIsReportedWithDetailAndRetrySucceedsOnceFixed() throws {
+        let data = fixtures.audiocppFixture()
+        let src = try write(data)
+        let sut = importer(published: published(data))
+        // a plain file where the staging folder must be makes the failure deterministic
+        try Data("x".utf8).write(to: staging)
+        XCTAssertThrowsError(try sut.install(source: src, installDirectory: install, stagingDirectory: staging)) {
+            guard case .fileSystem(let text)? = $0 as? Kitten2ImportError else { return XCTFail("\($0)") }
+            XCTAssertTrue(text.contains("staging folder"), text)
+            XCTAssertTrue(text.contains("["), "domain and code are included: \(text)")
+            XCTAssertTrue(($0 as NSError).localizedDescription.contains("try again"))
+        }
+        XCTAssertNil(Kitten2Library.active(in: install))
+        try FileManager.default.removeItem(at: staging)
+        XCTAssertNoThrow(try sut.install(source: src, installDirectory: install, stagingDirectory: staging))
+        XCTAssertNotNil(Kitten2Library.imported(in: install))
+    }
+
+    func testStalePartialFromACrashedAttemptDoesNotBreakTheNextImport() throws {
+        let data = fixtures.audiocppFixture()
+        try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
+        try Data(repeating: 9, count: 4096).write(to: staging.appendingPathComponent("import.partial"))
+        _ = try importer(published: published(data)).install(source: try write(data), installDirectory: install, stagingDirectory: staging)
+        XCTAssertEqual(try Data(contentsOf: install.appendingPathComponent(Kitten2Library.importedFileName)), data)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: staging.appendingPathComponent("import.partial").path))
+    }
+
+    func testFailedReplacementKeepsExistingFileAndItsRecord() throws {
+        let good = fixtures.audiocppFixture()
+        let file = published(good)
+        let original = try importer(published: file).install(source: try write(good, "first.gguf"), installDirectory: install, stagingDirectory: staging)
+        var wrong = file
+        wrong.sha256 = String(repeating: "0", count: 64)
+        XCTAssertThrowsError(try importer(published: wrong).install(source: try write(good, "second.gguf"), installDirectory: install, stagingDirectory: staging))
+        XCTAssertThrowsError(try importer(published: file).install(source: try write(good, "third.gguf"), installDirectory: install, stagingDirectory: staging, isCancelled: { true }))
+        guard case .imported(let record?)? = Kitten2Library.active(in: install)?.source else { return XCTFail("record lost") }
+        XCTAssertEqual(record.originalName, "first.gguf")
+        XCTAssertEqual(record.sha256, original.sha256)
+        XCTAssertEqual(try Data(contentsOf: install.appendingPathComponent(Kitten2Library.importedFileName)), good)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: staging.appendingPathComponent("import.partial").path))
+    }
+
+    func testCancelRequestedAfterTheLastChunkStillDiscardsTheImport() throws {
+        let data = fixtures.audiocppFixture()
+        let src = try write(data)
+        let flag = Flag()
+        XCTAssertThrowsError(try importer(published: published(data)).install(source: src, installDirectory: install, stagingDirectory: staging,
+                                                                              progress: { if $0 >= 1 { flag.set() } }, isCancelled: { flag.value })) {
+            XCTAssertEqual($0 as? Kitten2ImportError, .cancelled)
+        }
+        XCTAssertNil(Kitten2Library.active(in: install))
+    }
+
+    func testErrorDetailNamesDomainAndCode() {
+        let text = Kitten2ImportError.detail(NSError(domain: NSCocoaErrorDomain, code: 256, userInfo: [NSLocalizedDescriptionKey: "boom"]))
+        XCTAssertEqual(text, "boom [\(NSCocoaErrorDomain) 256]")
+    }
+
+    // MARK: Header inspection does not read or map the whole file
+
+    func testInspectReadsOnlyAHeaderWindowOfALargeFile() throws {
+        let header = fixtures.audiocppFixture()
+        let big = header + Data(repeating: 0, count: 3 << 20)
+        let url = try write(big, "big.gguf")
+        let report = try AudioCppGGUFInspector.inspect(url: url, initialWindow: 4096)
+        XCTAssertEqual(report.fileSize, Int64(big.count))
+        XCTAssertEqual(report.architecture, "audiocpp")
+    }
+
+    func testInspectGrowsTheWindowWhenTheHeaderIsLonger() throws {
+        let header = fixtures.audiocppFixture()
+        let url = try write(header + Data(repeating: 0, count: 100_000), "grow.gguf")
+        // header is ~1.3 KB, first window is 1 KB: needs one growth step
+        XCTAssertEqual(try AudioCppGGUFInspector.inspect(url: url, initialWindow: 1024, maxWindow: 1 << 20).architecture, "audiocpp")
+        // header longer than the largest window falls back to mapping and still works
+        XCTAssertEqual(try AudioCppGGUFInspector.inspect(url: url, initialWindow: 1024, maxWindow: 1024).architecture, "audiocpp")
+    }
+
+    func testInspectStillRejectsNonGGUFAndTruncatedFiles() throws {
+        XCTAssertThrowsError(try AudioCppGGUFInspector.inspect(url: try write(Data(repeating: 1, count: 5000), "x.gguf"), initialWindow: 1024)) {
+            XCTAssertEqual($0 as? AudioCppGGUFInspector.InspectError, .notGGUF)
+        }
+        let cut = fixtures.audiocppFixture().prefix(200)
+        XCTAssertThrowsError(try AudioCppGGUFInspector.inspect(url: try write(Data(cut), "cut.gguf"), initialWindow: 64))
+    }
+
+    func testDeleteAllRemovesInstalledPartialAndImportStagingFiles() throws {
+        let data = fixtures.audiocppFixture()
+        _ = try importer(published: published(data)).install(source: try write(data), installDirectory: install, stagingDirectory: staging)
+        let file = Kitten2Package.file
+        try Data(repeating: 1, count: 10).write(to: ModelDownloader.partialURL(for: file, in: staging))
+        try Data(repeating: 1, count: 10).write(to: staging.appendingPathComponent("import.partial"))
+        try Data(repeating: 1, count: 10).write(to: InstalledModels.fileURL(file, in: install))
+        Kitten2Library.deleteAll(installDirectory: install, stagingDirectory: staging)
+        XCTAssertNil(Kitten2Library.active(in: install))
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: staging.path), [])
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: install.path), [])
+        // a fresh import works right after the delete
+        XCTAssertNoThrow(try importer(published: published(data)).install(source: try write(data), installDirectory: install, stagingDirectory: staging))
+    }
+
     func testStatusIsIndependentPerOperation() {
         var s = OperationStatus<Kitten2Operation>()
         s.error("Not enough free storage", for: .modelDownload)
@@ -162,4 +292,11 @@ final class Kitten2ImporterTests: XCTestCase {
         XCTAssertEqual(LegacyVariant.micro.repositoryPage.absoluteString, "https://huggingface.co/KittenML/kitten-tts-micro-0.8")
         XCTAssertEqual(LegacyVariant.mini.repositoryPage.absoluteString, "https://huggingface.co/KittenML/kitten-tts-mini-0.8")
     }
+}
+
+private final class Flag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var flag = false
+    var value: Bool { lock.lock(); defer { lock.unlock() }; return flag }
+    func set() { lock.lock(); flag = true; lock.unlock() }
 }

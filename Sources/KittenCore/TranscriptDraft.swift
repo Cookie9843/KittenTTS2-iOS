@@ -83,6 +83,6 @@ public enum TranscriptionAvailability: Equatable, Sendable {
 
 /// Fixed wording for the review cue so the screen and tests agree.
 public enum TranscriptCopy {
-    public static let reviewCue = "Review the transcript before generating: listen to the clip and correct any mistakes. Automatic recognition can be wrong, and a wrong transcript makes the cloned voice worse."
+    public static let reviewCue = "Review the transcript before generating. Automatic recognition can mishear words and often leaves out or misplaces punctuation. Listen to the reference clip and correct both the wording and the punctuation before you confirm it or generate speech; a wrong transcript makes the cloned voice worse."
     public static let privacyNote = "Automatic transcription runs on this device with Apple’s speech recognition and is only used when you tap Transcribe. Your recording is not uploaded."
 }

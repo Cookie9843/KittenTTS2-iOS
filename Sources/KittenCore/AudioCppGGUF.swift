@@ -167,10 +167,25 @@ public enum AudioCppGGUFInspector {
         for _ in 0..<count { try skipValue(&r, type: elementType, what) }
     }
 
-    /// Parses the GGUF header, metadata and tensor-info table. Tensor data is never read; the file is
-    /// memory-mapped so only the header pages are touched.
-    public static func inspect(url: URL) throws -> AudioCppGGUFReport {
+    /// Parses the GGUF header, metadata and tensor-info table. Tensor data is never read.
+    /// Only a leading window of the file is read (and grown when the header is longer), so inspecting a 3 GB package never maps
+    /// or loads the whole file. That matters while another multi-GB model is already memory-mapped by the speech engine.
+    /// Only if the header is longer than `maxWindow` does it fall back to memory-mapping the file.
+    public static func inspect(url: URL, initialWindow: Int = 8 << 20, maxWindow: Int = 128 << 20) throws -> AudioCppGGUFReport {
         let size = (try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.int64Value ?? 0
+        var window = max(initialWindow, 1024)
+        while size > 0 {
+            let want = Int(min(Int64(window), size))
+            let prefix: Data = try {
+                let handle = try FileHandle(forReadingFrom: url)
+                defer { try? handle.close() }
+                return try handle.read(upToCount: want) ?? Data()
+            }()
+            do { return try inspect(data: prefix, fileName: url.lastPathComponent, fileSize: size) }
+            catch InspectError.truncated where Int64(want) < size && window < maxWindow { window = min(window * 4, maxWindow) }
+            catch InspectError.truncated where Int64(want) < size { break }
+            // Any other error, or a truncated header in a file that was read completely, is real and propagates.
+        }
         let data = try Data(contentsOf: url, options: .alwaysMapped)
         return try inspect(data: data, fileName: url.lastPathComponent, fileSize: size > 0 ? size : Int64(data.count))
     }

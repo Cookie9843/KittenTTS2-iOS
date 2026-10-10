@@ -14,6 +14,7 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
         case loading
         case generating
         case recording
+        case removing
     }
 
     static let licenseKey = "kt.kitten2.licenseAcknowledged"
@@ -179,7 +180,10 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
     /// Installs a KittenTTS 2 package the user picked in Files. The file is validated and streamed into the staging folder
     /// first, so an invalid, failed or cancelled import never touches the model that is already installed.
     func importModel(from url: URL) {
-        guard !busy else { return }
+        guard !busy else {
+            post("Another task is running (\(busyDescription)). Wait for it to finish or cancel it, then pick the file again.", for: .modelImport, error: true)
+            return
+        }
         post(nil, for: .modelImport)
         phase = .importing(0)
         let flag = CancelFlag()
@@ -198,13 +202,16 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
                         guard percent != last else { return }
                         last = percent
                         Task { @MainActor in
-                            if case .importing(let current)? = self?.phase, value > current { self?.phase = .importing(value) }
+                            // Only the import that is still current may move the progress bar.
+                            guard let self, self.importCancel === flag else { return }
+                            if case .importing(let current) = self.phase, value > current { self.phase = .importing(value) }
                         }
                     }, isCancelled: { flag.isCancelled })
                     return .success(record)
                 } catch { return .failure(error) }
             }.value
             guard let self else { return }
+            if importCancel === flag { importCancel = nil }
             switch result {
             case .success(let record):
                 await engine.unload()
@@ -217,9 +224,37 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
                      : "It is a different export from the published package, so its checksum could not be compared; the model is checked again when it loads."),
                      for: .modelImport)
             case .failure(let error):
+                // Back to idle with the installed model untouched, so the next attempt starts from a clean state without a relaunch.
                 phase = .idle
-                post(error.localizedDescription, for: .modelImport, error: true)
+                post(importFailureText(error), for: .modelImport, error: true)
             }
+        }
+    }
+
+    /// The error's own explanation, plus the current free storage and memory when the failure was an I/O problem, so a one-off
+    /// failure (for example under memory pressure) can be told apart from a bad file.
+    private func importFailureText(_ error: Error) -> String {
+        var text = error.localizedDescription
+        switch error as? Kitten2ImportError {
+        case .fileSystem?, .unreadable?, nil:
+            let fmt = { (b: Int64) in ByteCountFormatter.string(fromByteCount: b, countStyle: .file) }
+            let free = freeDiskBytes.map(fmt) ?? "unknown"
+            let memory = fmt(Int64(clamping: Kitten2Engine.availableMemory))
+            text += " (Free storage: \(free); memory available to the app: \(memory)\(isLoaded ? "; KittenTTS 2 is loaded, “Free memory” in Models releases it" : "").)"
+        default: break
+        }
+        return text
+    }
+
+    private var busyDescription: String {
+        switch phase {
+        case .idle: return "idle"
+        case .downloading: return "a download"
+        case .importing: return "an import"
+        case .loading: return "loading the model"
+        case .generating: return "generating speech"
+        case .recording: return "recording"
+        case .removing: return "removing the model"
         }
     }
 
@@ -227,14 +262,17 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
 
     func importFailed(_ message: String) { post(message, for: .modelImport, error: true) }
 
+    /// Releases the native engine first (it has the file memory-mapped), and holds `busy` for the whole removal so that no import,
+    /// download or synthesis can start in between and have files removed under it.
     func deleteModel() {
         guard !busy else { return }
+        phase = .removing
         Task { [weak self] in
             guard let self else { return }
             await engine.unload()
             isLoaded = false
-            InstalledModels.delete(modelFile, installDirectory: installDirectory, stagingDirectory: stagingDirectory)
-            Kitten2Library.deleteImported(in: installDirectory)
+            Kitten2Library.deleteAll(installDirectory: installDirectory, stagingDirectory: stagingDirectory)
+            phase = .idle
             installRevision += 1
             post("KittenTTS 2 was removed from this device.", for: .modelDownload)
             post(nil, for: .modelImport)
@@ -303,7 +341,7 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
                 if useClone {
                     guard let reference else { throw NativeEngineError(message: "Record or choose a reference clip in Voices first.") }
                     if transcriptDraft.needsReview {
-                        throw NativeEngineError(message: "Review the automatic transcript in Voices first: listen to the clip, correct any mistakes, then confirm it.")
+                        throw NativeEngineError(message: "Review the automatic transcript in Voices first: listen to the clip, correct any wrong words and punctuation, then confirm it.")
                     }
                     let checked = try CloneInput.validate(clip: reference, transcript: transcript)
                     let text = try SynthesisInput.validatePreset(text: rawText, voice: Kitten2Package.defaultVoice)
@@ -486,7 +524,7 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
     /// Validation shown live under the clone form.
     var cloneStatus: (ok: Bool, text: String)? {
         guard let reference else { return nil }
-        if transcriptDraft.needsReview { return (false, "Review the transcript below, then tap “It matches” (or edit it) to use this voice.") }
+        if transcriptDraft.needsReview { return (false, "Review the transcript below: fix any misheard words and punctuation, then tap “Words and punctuation are correct” (or edit it) to use this voice.") }
         do {
             let checked = try CloneInput.validate(clip: reference, transcript: transcript)
             return (true, checked.warnings.isEmpty ? "Ready to use." : checked.warnings.joined(separator: " "))
