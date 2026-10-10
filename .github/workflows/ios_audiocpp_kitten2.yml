@@ -47,6 +47,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: swift test (audio.cpp GGUF metadata parsing, validation, resource checks)
         run: swift test
+      - name: Bridge lifecycle test (fake audio.cpp ABI; no model)
+        run: scripts/run_bridge_lifecycle_test.sh
 
   audiocpp-ios-ipa:
     needs: swift-tests

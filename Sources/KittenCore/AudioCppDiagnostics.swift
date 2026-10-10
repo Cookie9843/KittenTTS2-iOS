@@ -32,6 +32,22 @@ public enum AudioCppSynthesisArenas {
     public static var peakReservationBytes: UInt64 { max(patchedEncoderBytes, flowDecoderBytes) }
 }
 
+/// The HiFT vocoder's backend graph context (src/framework/modules/vocoders/hift_vocoder.cpp, `BackendRunner`). Upstream
+/// asked `ggml_init` for 512 MiB plus 4 MiB per mel frame on every new text length (24 kHz audio at 50 frames per second:
+/// about 2.5 GiB for 10 s). The context is `no_alloc`, i.e. tensor headers and the cgraph only, and the graph topology does
+/// not depend on the frame count, so the request was a pure `malloc` reservation whose failure surfaced as "failed to
+/// initialize HiFT backend graph context". scripts/patches/audiocpp-hift-backend-graph-arena.patch caps it.
+public enum AudioCppHiftArena {
+    public static let melFramesPerSecond: UInt64 = 50
+    public static let upstreamBaseBytes: UInt64 = 512 * AudioCppSynthesisArenas.mib
+    public static let upstreamBytesPerFrame: UInt64 = 4 * AudioCppSynthesisArenas.mib
+    public static let patchedCapBytes: UInt64 = 128 * AudioCppSynthesisArenas.mib
+
+    public static func frames(forSeconds seconds: Double) -> UInt64 { UInt64(max(0, seconds) * Double(melFramesPerSecond)) }
+    public static func upstreamBytes(frames: UInt64) -> UInt64 { upstreamBaseBytes + frames * upstreamBytesPerFrame }
+    public static func patchedBytes(frames: UInt64) -> UInt64 { min(upstreamBytes(frames: frames), patchedCapBytes) }
+}
+
 /// Decides, before the uncatchable native call, whether synthesis may start.
 public struct SynthesisPreflight: Equatable {
     public let canProceed: Bool

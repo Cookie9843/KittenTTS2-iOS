@@ -1,0 +1,44 @@
+diff --git a/src/framework/modules/vocoders/hift_vocoder.cpp b/src/framework/modules/vocoders/hift_vocoder.cpp
+index 8d2c196..b055a76 100644
+--- a/src/framework/modules/vocoders/hift_vocoder.cpp
++++ b/src/framework/modules/vocoders/hift_vocoder.cpp
+@@ -832,7 +832,13 @@ public:
+                 " MiB for " + std::to_string(clamped_frames) +
+                 " frames) exceeds size_t addressable memory limit");
+         }
+-        const size_t context_size = static_cast<size_t>(kBaseBytes + clamped_frames * kPerFrameBytes);
++        // The context is no_alloc: it holds tensor headers and the cgraph only, never tensor data (that lives in the
++        // gallocr buffer). The graph topology does not depend on the frame count, so the 512 MiB + 4 MiB/frame request
++        // (about 2.5 GiB for 10 s of speech) is a pure malloc() reservation that fails with "failed to initialize HiFT
++        // backend graph context" whenever the process cannot find that much address space/memory, i.e. for longer
++        // texts on memory-constrained devices. 65536 graph nodes at <= 4 tensor headers each fit well below the cap.
++        constexpr uint64_t kMaxMetadataBytes = 128ull * 1024ull * 1024ull;
++        const size_t context_size = static_cast<size_t>(std::min<uint64_t>(kBaseBytes + clamped_frames * kPerFrameBytes, kMaxMetadataBytes));
+         ggml_init_params params{
+             context_size,
+             nullptr,
+@@ -840,8 +846,11 @@ public:
+         };
+         ctx_ = ggml_init(params);
+         if (ctx_ == nullptr) {
+-            throw std::runtime_error("failed to initialize HiFT backend graph context");
++            throw std::runtime_error("failed to initialize HiFT backend graph context (" +
++                                     std::to_string(context_size / (1024ull * 1024ull)) + " MiB arena)");
+         }
++        // A constructor that throws never runs the destructor, so release the context on every failure path.
++        try {
+         speech_in_ = named(ggml_new_tensor_2d(ctx_, GGML_TYPE_F32, frames, weights.config.in_channels), "speech_in");
+         source_in_ = named(ggml_new_tensor_2d(ctx_, GGML_TYPE_F32, stft_frames, kHiftStftChannels), "source_in");
+         post_ = build_backend_graph(
+@@ -850,6 +859,11 @@ public:
+             speech_in_,
+             source_in_,
+             weights.execution_context->uses_host_graph_plan());
++        } catch (...) {
++            ggml_free(ctx_);
++            ctx_ = nullptr;
++            throw;
++        }
+         graph_ = ggml_new_graph_custom(ctx_, 65536, false);
+         ggml_build_forward_expand(graph_, post_);
+         gallocr_ = ggml_gallocr_new(ggml_backend_get_default_buffer_type(weights.execution_context->backend()));

@@ -27,6 +27,8 @@
     <key>NSMicrophoneUsageDescription</key>
     <string>KittenTTS uses the microphone only when you record a short reference clip for voice cloning. Audio is processed on this device and is never uploaded.</string>
 
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>KittenTTS can draft a transcript of your reference clip when you tap Transcribe. Recognition runs on this device only and the recording is never uploaded.</string>
     <key>UISupportedInterfaceOrientations</key>
     <array>
         <string>UIInterfaceOrientationPortrait</string>

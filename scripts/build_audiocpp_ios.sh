@@ -51,8 +51,10 @@ test "$(git -C "$SRC" rev-parse HEAD)" = "$AUDIOCPP_REF" || { echo "pinned revis
 #  - S3 flow-encoder arenas: ten layers x 320 MiB + 3 more reserved at once during synthesis (128 MiB abort).
 #  - S3 flow-decoder arena: 512 MiB reserved and kept alive in the session cache between requests (a second generation
 #    failed with "failed to initialize ggml graph context for S3 flow decoder").
+#  - HiFT backend graph arena: 512 MiB + 4 MiB per mel frame (~2.5 GiB for 10 s of speech) malloc()ed on every new text
+#    length; its failure is "failed to initialize HiFT backend graph context". Capped to 128 MiB (header-only arena).
 #  - ggml_init(): return NULL (callers throw -> error status) instead of GGML_ASSERT when the arena malloc fails.
-for name in audiocpp-weight-store-metadata-arena audiocpp-s3-flow-encoder-metadata-arena audiocpp-s3-flow-decoder-metadata-arena ggml-init-return-null-on-oom; do
+for name in audiocpp-weight-store-metadata-arena audiocpp-s3-flow-encoder-metadata-arena audiocpp-s3-flow-decoder-metadata-arena audiocpp-hift-backend-graph-arena ggml-init-return-null-on-oom; do
   PATCH="$ROOT/scripts/patches/$name.patch"
   git -C "$SRC" apply --check "$PATCH" || { echo "patch $name does not apply to the pinned revision" >&2; exit 1; }
   git -C "$SRC" apply "$PATCH"
@@ -63,6 +65,8 @@ grep -q metadata_arena_bytes "$SRC/src/models/chatterbox/s3gen_flow.cpp" \
   || { echo "S3 flow-encoder arena patch missing" >&2; exit 1; }
 grep -q kDecoderGraphNodes "$SRC/src/models/chatterbox/s3gen_flow.cpp" \
   || { echo "S3 flow-decoder arena patch missing" >&2; exit 1; }
+grep -q kMaxMetadataBytes "$SRC/src/framework/modules/vocoders/hift_vocoder.cpp" \
+  || { echo "HiFT backend graph arena patch missing" >&2; exit 1; }
 grep -q "failed to allocate the %zu byte context arena" "$SRC/external/ggml/src/ggml.c" \
   || { echo "ggml_init soft-failure patch missing" >&2; exit 1; }
 echo "== source =="; git -C "$SRC" log -1 --format='%H %s'

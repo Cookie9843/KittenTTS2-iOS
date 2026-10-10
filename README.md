@@ -34,7 +34,7 @@ Each operation owns its message (`OperationStatus`): model download, model impor
 
 The model is **never bundled** in the repository, CI or IPA. The published file is 3,282,123,776 bytes (3.28 GB, SHA-256 `e97920ca5053f9fcd4de638dcd8114ed2510d4291a93257473a8843c3ff349ad`). It is memory-mapped, so its size is not the same as resident memory, but devices with limited free memory may still fail; the app shows warnings based on `os_proc_available_memory`, not guarantees.
 
-Limitations: generation cannot be interrupted once started; no automatic transcription for cloning; downloads pause/resume only while the app is open; no named clone profiles.
+Limitations: generation cannot be interrupted once started; downloads pause/resume only while the app is open; no named clone profiles.
 
 ## Install and signing
 
@@ -52,3 +52,15 @@ Platforms: iPhone and iPad (device families 1 and 2). `Package.swift` lists macO
 ## Licensing / provenance
 
 App code: MIT. KittenTTS 2 weights are a community conversion of KittenML / Stellon Labs' model under the **Stellon Labs Community License** (embedded LICENSE/NOTICE); models are licensed separately from code. All notices and credits are in the app under Models → Licenses and credits (source: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)); the download sheet asks for a short consent and links there. See also [docs/KITTENTTS2_IOS_FEASIBILITY.md](docs/KITTENTTS2_IOS_FEASIBILITY.md) for the unsupported TQ2_1 runtime.
+
+## Repeated-generation reliability (native lifecycle)
+
+Reported on a device: `audiocpp_session_create failed … std::bad_alloc` after a few generations, and sometimes `failed to initialize HiFT backend graph context`. Findings from the pinned audio.cpp source and this app's bridge (not yet confirmed on a device):
+
+- **HiFT context**: upstream's `BackendRunner` asks `ggml_init` for 512 MiB + 4 MiB per mel frame whenever the text length changes (≈2.5 GiB for 10 s of speech). The context is `no_alloc` (headers only; topology is independent of length), so this was a length-dependent `malloc` reservation that fails intermittently on a memory-constrained device. `scripts/patches/audiocpp-hift-backend-graph-arena.patch` caps it at 128 MiB and frees the context if graph building throws (a throwing constructor never ran its destructor).
+- **Session churn**: a session creation instantiates every weight set again. The bridge used one session per task and freed/recreated it every time the user switched between a preset and a cloned voice. The bridge now keeps ONE `tts` session for the model's lifetime for both (the kitten_tts2 session treats a request carrying reference audio as a clone). A session whose request failed is freed and rebuilt before the next request, never retried blindly. Errors now include the memory still available to the app, and Diagnostics shows session create/reset/failure counters.
+- Evidence: `swift test` (arena model) and `scripts/run_bridge_lifecycle_test.sh` (bridge policy against a fake audio.cpp ABI: one session across alternating preset/clone calls, discard-and-rebuild, no leaked requests/results). These do not measure the real runtime's memory; please retest on a device and share Diagnostics.
+
+## Automatic transcript for cloned voices
+
+After you record or choose a reference clip, the app drafts a transcript with Apple's on-device speech recognition (`requiresOnDeviceRecognition`; if a language has no on-device model it reports that and you type the text instead). The draft is editable and **must be reviewed**: a cloned voice cannot be used until you edit the text or tap “It matches”. Text you typed yourself is never overwritten by a recognition result unless you tap Transcribe again. Nothing is uploaded.

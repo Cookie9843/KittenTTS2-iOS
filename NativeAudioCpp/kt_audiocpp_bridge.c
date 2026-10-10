@@ -14,13 +14,15 @@ struct kt_engine {
     audiocpp_model *model;
     audiocpp_session *session;
     int threads;
-    char task[8]; /* task of `session`: "tts" or "clon" */
+    int session_suspect; /* the last request on `session` failed: rebuild it before the next one */
+    kt_stats stats;
 };
 
 static void set_err(char *err, size_t cap, const char *stage, audiocpp_status status) {
     if (!err || cap == 0) return;
-    snprintf(err, cap, "%s failed: %s (status %d): %s", stage, audiocpp_status_string(status), (int)status,
-             audiocpp_last_error());
+    snprintf(err, cap, "%s failed: %s (status %d): %s [available to app: %llu MiB]", stage,
+             audiocpp_status_string(status), (int)status, audiocpp_last_error(),
+             (unsigned long long)(kt_available_memory() >> 20));
 }
 
 int kt_runtime_linked(void) { return 1; }
@@ -73,29 +75,41 @@ void kt_unload(kt_engine *e) {
     free(e);
 }
 
-/* Creates the session for `task` ("tts" or "clon"). At most one session exists at a time: an existing session of a
- * different task is freed first so the model's weights are never instantiated twice. */
-static int ensure_session(kt_engine *e, const char *task, char *err, size_t err_cap) {
-    if (e->session && strcmp(e->task, task) == 0) return 0;
+/* Makes sure `e->session` is usable. Preset TTS and cloning share ONE "tts" session for the whole life of the model:
+ * the kitten_tts2 session runs any request that carries reference audio as a clone, and creating a session instantiates
+ * every weight set again (LM, S3 flow encoder/decoder, HiFT), so switching sessions per task churned multiple GiB
+ * through the allocator and eventually failed in audiocpp_session_create with std::bad_alloc. A session whose last
+ * request failed may still hold half-built graph caches, so it is released (never retried blindly) and rebuilt, after
+ * its memory was returned, before the next request. */
+static int ensure_session(kt_engine *e, char *err, size_t err_cap) {
+    if (e->session && !e->session_suspect) return 0;
     if (e->session) {
         audiocpp_session_free(e->session);
         e->session = NULL;
-        e->task[0] = 0;
+        e->session_suspect = 0;
+        e->stats.sessions_reset++;
     }
-    if (!audiocpp_model_supports(e->model, task, "offline")) {
+    if (!audiocpp_model_supports(e->model, "tts", "offline")) {
         if (err && err_cap)
-            snprintf(err, err_cap, "model family '%s' does not report offline '%s' support", audiocpp_model_family(e->model), task);
+            snprintf(err, err_cap, "model family '%s' does not report offline 'tts' support", audiocpp_model_family(e->model));
         return 4;
     }
     audiocpp_backend_config backend = { "cpu", 0, e->threads > 0 ? e->threads : 1 };
-    audiocpp_status st = audiocpp_session_create(e->model, task, "offline", &backend, NULL, &e->session);
+    audiocpp_status st = audiocpp_session_create(e->model, "tts", "offline", &backend, NULL, &e->session);
     if (st != AUDIOCPP_OK) {
         e->session = NULL;
+        e->stats.failures++;
         set_err(err, err_cap, "audiocpp_session_create", st);
         return 5;
     }
-    snprintf(e->task, sizeof e->task, "%s", task);
+    e->stats.sessions_created++;
     return 0;
+}
+
+void kt_engine_stats(const kt_engine *e, kt_stats *out) {
+    if (!out) return;
+    memset(out, 0, sizeof *out);
+    if (e) *out = e->stats;
 }
 
 int kt_load(const char *path, int threads, kt_engine **out, char *describe, size_t describe_cap, char *err,
@@ -122,7 +136,7 @@ int kt_load(const char *path, int threads, kt_engine **out, char *describe, size
     st = audiocpp_model_load(e->registry, path, &config, NULL, &e->model);
     if (st != AUDIOCPP_OK) { set_err(err, err_cap, "audiocpp_model_load", st); kt_unload(e); return 3; }
 
-    int rc = ensure_session(e, "tts", err, err_cap);
+    int rc = ensure_session(e, err, err_cap);
     if (rc != 0) { kt_unload(e); return rc; }
 
     if (describe && describe_cap) {
@@ -138,8 +152,11 @@ int kt_load(const char *path, int threads, kt_engine **out, char *describe, size
 static int run_and_copy(kt_engine *e, audiocpp_request *req, audiocpp_status st, const char *stage, kt_audio *out,
                         char *err, size_t err_cap) {
     audiocpp_result *result = NULL;
-    if (st == AUDIOCPP_OK) { stage = "audiocpp_session_run"; st = audiocpp_session_run(e->session, req, &result); }
+    int ran = 0;
+    if (st == AUDIOCPP_OK) { stage = "audiocpp_session_run"; ran = 1; st = audiocpp_session_run(e->session, req, &result); }
     if (st != AUDIOCPP_OK) {
+        if (ran) e->session_suspect = 1; /* request-building errors never touched the session */
+        e->stats.failures++;
         set_err(err, err_cap, stage, st);
         audiocpp_request_free(req);
         return 3;
@@ -151,6 +168,8 @@ static int run_and_copy(kt_engine *e, audiocpp_request *req, audiocpp_status st,
     if (st != AUDIOCPP_OK || !samples || frames == 0 || channels < 1 || rate < 1) {
         if (st != AUDIOCPP_OK) set_err(err, err_cap, "audiocpp_result_audio", st);
         else if (err && err_cap) snprintf(err, err_cap, "synthesis returned no audio (frames=%zu, rate=%d, channels=%d)", frames, rate, channels);
+        e->session_suspect = 1;
+        e->stats.failures++;
         audiocpp_result_free(result);
         audiocpp_request_free(req);
         return 4;
@@ -167,6 +186,7 @@ static int run_and_copy(kt_engine *e, audiocpp_request *req, audiocpp_status st,
     out->frames = frames;
     out->sample_rate = rate;
     out->channels = channels;
+    e->stats.completed++;
     audiocpp_result_free(result);
     audiocpp_request_free(req);
     return 0;
@@ -179,7 +199,7 @@ int kt_synthesize(kt_engine *e, const char *text, const char *voice_id, int64_t 
         return 1;
     }
     memset(out, 0, sizeof *out);
-    int rc = ensure_session(e, "tts", err, err_cap);
+    int rc = ensure_session(e, err, err_cap);
     if (rc != 0) return rc;
     audiocpp_request *req = audiocpp_request_create();
     if (!req) {
@@ -206,7 +226,7 @@ int kt_synthesize_clone(kt_engine *e, const char *text, const float *reference, 
         return 1;
     }
     memset(out, 0, sizeof *out);
-    int rc = ensure_session(e, "clon", err, err_cap);
+    int rc = ensure_session(e, err, err_cap);
     if (rc != 0) return rc;
     audiocpp_request *req = audiocpp_request_create();
     if (!req) {
@@ -231,6 +251,7 @@ static const char *kNotLinked =
 
 void kt_install_abort_hook(void) {}
 void kt_unload(kt_engine *e) { (void)e; }
+void kt_engine_stats(const kt_engine *e, kt_stats *out) { (void)e; if (out) memset(out, 0, sizeof *out); }
 
 int kt_load(const char *path, int threads, kt_engine **out, char *describe, size_t describe_cap, char *err,
             size_t err_cap) {

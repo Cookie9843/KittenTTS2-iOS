@@ -52,6 +52,7 @@ final class Kitten2Engine: @unchecked Sendable {
                 if rc == 0, let engine {
                     self.handle = engine
                     self.setLoaded(true)
+                    self.refreshStats(engine)
                     continuation.resume(returning: (String(cString: describe), Date().timeIntervalSince(start)))
                 } else {
                     continuation.resume(throwing: NativeEngineError(message: "Could not load the model (code \(rc)). " + String(cString: err)))
@@ -60,12 +61,23 @@ final class Kitten2Engine: @unchecked Sendable {
         }
     }
 
+    private var statsSnapshot: kt_stats?
+    /// Lifecycle counters of the native engine as of the last finished request (nil when not loaded).
+    var stats: kt_stats? { lock.lock(); defer { lock.unlock() }; return statsSnapshot }
+    /// Must run on the native queue (the handle is not thread-safe).
+    private func refreshStats(_ engine: OpaquePointer?) {
+        var out = kt_stats()
+        if let engine { kt_engine_stats(engine, &out) }
+        lock.lock(); statsSnapshot = engine == nil ? nil : out; lock.unlock()
+    }
+
     func unload() async {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             queue.async {
                 if let engine = self.handle { kt_unload(engine) }
                 self.handle = nil
                 self.setLoaded(false)
+                self.refreshStats(nil)
                 continuation.resume()
             }
         }
@@ -101,6 +113,7 @@ final class Kitten2Engine: @unchecked Sendable {
                 var err = [CChar](repeating: 0, count: 8192)
                 let rc = err.withUnsafeMutableBufferPointer { body(engine, &audio, $0.baseAddress!, $0.count) }
                 defer { kt_audio_free(&audio) }
+                self.refreshStats(engine)
                 guard rc == 0, let pointer = audio.samples else {
                     continuation.resume(throwing: NativeEngineError(message: "Speech generation failed (code \(rc)). " + String(cString: err)))
                     return

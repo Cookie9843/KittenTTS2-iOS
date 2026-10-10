@@ -18,7 +18,7 @@ git -C "$SRC" init --quiet
 git -C "$SRC" remote add origin "$AUDIOCPP_REPO" 2>/dev/null || true
 git -C "$SRC" fetch --quiet --depth 1 origin "$AUDIOCPP_REF"
 git -C "$SRC" checkout --quiet --force FETCH_HEAD
-for name in audiocpp-weight-store-metadata-arena audiocpp-s3-flow-encoder-metadata-arena audiocpp-s3-flow-decoder-metadata-arena ggml-init-return-null-on-oom; do
+for name in audiocpp-weight-store-metadata-arena audiocpp-s3-flow-encoder-metadata-arena audiocpp-s3-flow-decoder-metadata-arena audiocpp-hift-backend-graph-arena ggml-init-return-null-on-oom; do
   git -C "$SRC" apply "$ROOT/scripts/patches/$name.patch"
 done
 cmake -S "$SRC" -B "$BLD" -DCMAKE_BUILD_TYPE=Release -DAUDIOCPP_MODEL_SET=custom -DAUDIOCPP_MODELS=kitten_tts2 \
