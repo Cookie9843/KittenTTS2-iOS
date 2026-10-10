@@ -46,9 +46,9 @@ audiocpp_status audiocpp_result_audio(const audiocpp_result *, const float **, s
 /* test controls */
 typedef struct fake_counters {
     int registries, models, sessions, requests, results; /* currently alive */
-    int sessions_created, peak_sessions, runs, clone_runs;
+    int sessions_created, peak_sessions, runs, clone_runs, task_mismatches, tts_creates, clon_creates;
     int fail_next_session_create, fail_next_run;
-    char last_session_task[8];
+    char last_session_task[8], live_session_task[8];
 } fake_counters;
 extern fake_counters fake;
 #endif

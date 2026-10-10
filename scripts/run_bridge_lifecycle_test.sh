@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Host test of the C bridge's session/request lifecycle (NativeAudioCpp/kt_audiocpp_bridge.c) against a fake audio.cpp C ABI.
-# No model, no network. Proves the bridge's policy (one shared session, discard-and-rebuild after a failure, no leaks); it
+# No model, no network. Proves the bridge's policy (task-specific tts/clon sessions, one alive at a time, discard-and-rebuild after a failure, no leaks); it
 # does not measure the real runtime's memory behaviour.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
