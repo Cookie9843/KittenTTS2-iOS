@@ -71,4 +71,17 @@ final class AudioCppDiagnosticsTests: XCTestCase {
         let load = AudioCppDiagnostics.previousRunNote(stage: "native model load (x)", nativeLog: log)!
         XCTAssertFalse(load.contains("not a model-load failure"))
     }
+
+    func testHiftArenaRequestScaledWithTextLengthAndIsNowCapped() {
+        let mib = AudioCppSynthesisArenas.mib
+        let tenSeconds = AudioCppHiftArena.frames(forSeconds: 10)
+        XCTAssertEqual(tenSeconds, 500)
+        // upstream: 512 MiB + 4 MiB x 500 frames = 2.5 GiB malloc for a ~10 s utterance
+        XCTAssertEqual(AudioCppHiftArena.upstreamBytes(frames: tenSeconds), (512 + 2000) * mib)
+        XCTAssertEqual(AudioCppHiftArena.patchedBytes(frames: tenSeconds), 128 * mib)
+        XCTAssertEqual(AudioCppHiftArena.patchedBytes(frames: 1), 128 * mib)
+        // the patched request never depends on the text length
+        XCTAssertEqual(AudioCppHiftArena.patchedBytes(frames: 50), AudioCppHiftArena.patchedBytes(frames: 5000))
+        XCTAssertLessThanOrEqual(AudioCppHiftArena.patchedBytes(frames: 5000), AudioCppHiftArena.patchedCapBytes)
+    }
 }

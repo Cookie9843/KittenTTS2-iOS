@@ -24,14 +24,63 @@ struct ContentView: View {
         TabView(selection: $tab) {
             SpeakView(tab: $tab).tabItem { Label("Speak", systemImage: "waveform") }.tag(AppTab.speak)
             VoicesView().tabItem { Label("Voices", systemImage: "person.wave.2") }.tag(AppTab.voices)
-            ModelsView().tabItem { Label("Models", systemImage: "gearshape") }.tag(AppTab.models)
+            ModelsView().tabItem { Label("Models", systemImage: "square.stack.3d.down.right") }.tag(AppTab.models)
             HistoryView().tabItem { Label("History", systemImage: "clock") }.tag(AppTab.history)
         }
+        .tint(Theme.accent)
     }
 }
 
 // MARK: - Shared pieces
 
+enum Theme {
+    static let accent = Color.orange
+    static let cardRadius: CGFloat = 16
+    /// Keeps content readable on iPad and in landscape instead of stretching edge to edge.
+    static let maxContentWidth: CGFloat = 640
+}
+
+/// A rounded grouped surface with an optional heading.
+struct Card<Content: View>: View {
+    let title: String?
+    @ViewBuilder let content: Content
+
+    init(_ title: String? = nil, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let title {
+                Text(title).font(.headline).accessibilityAddTraits(.isHeader)
+            }
+            content
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
+    }
+}
+
+/// Scrolling screen of cards, centred and width-limited so it looks right on iPhone, iPad and in landscape.
+struct CardScreen<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 16) { content }
+                .frame(maxWidth: Theme.maxContentWidth)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity)
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+    }
+}
+
+/// One operation's result message, with an icon so state is not conveyed by colour alone.
 struct MessageView: View {
     let message: StatusMessage?
 
@@ -39,12 +88,36 @@ struct MessageView: View {
 
     var body: some View {
         if let message {
-            Text(message.text)
-                .font(.footnote)
-                .foregroundStyle(message.isError ? Color.red : Color.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityLabel(message.isError ? "Error: \(message.text)" : message.text)
+            Label {
+                Text(message.text).fixedSize(horizontal: false, vertical: true)
+            } icon: {
+                Image(systemName: message.isError ? "exclamationmark.triangle.fill" : "info.circle")
+            }
+            .font(.footnote)
+            .foregroundStyle(message.isError ? Color.red : Color.secondary)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(message.isError ? "Error: \(message.text)" : message.text)
         }
+    }
+}
+
+/// Highlighted notice (used for the transcript review cue).
+struct Callout: View {
+    let text: String
+    var systemImage = "exclamationmark.bubble.fill"
+    var tint: Color = .orange
+
+    var body: some View {
+        Label {
+            Text(text).fixedSize(horizontal: false, vertical: true)
+        } icon: {
+            Image(systemName: systemImage).foregroundStyle(tint)
+        }
+        .font(.footnote)
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -52,11 +125,13 @@ struct EngineSwitcher: View {
     @Binding var engine: EngineChoice
 
     var body: some View {
-        Picker("Engine", selection: $engine) {
-            ForEach(EngineChoice.allCases) { Text($0.title).tag($0) }
+        VStack(alignment: .leading, spacing: 8) {
+            Picker("Engine", selection: $engine) {
+                ForEach(EngineChoice.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            Text(engine.subtitle).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
-        .pickerStyle(.segmented)
-        Text(engine.subtitle).font(.footnote).foregroundStyle(.secondary)
     }
 }
 
@@ -68,7 +143,10 @@ struct SpeakView: View {
     @Binding var tab: AppTab
     @AppStorage("kt.engine") private var engineRaw = EngineChoice.kitten2.rawValue
     @State private var text = ""
-    @ScaledMetric(relativeTo: .body) private var editorHeight: CGFloat = 140
+    @FocusState private var editing: Bool
+    @ScaledMetric(relativeTo: .body) private var editorHeight: CGFloat = 150
+
+    private static let cloneTag = "__cloned_voice__"
 
     private var engine: Binding<EngineChoice> {
         Binding(get: { EngineChoice(rawValue: engineRaw) ?? .kitten2 }, set: { engineRaw = $0.rawValue })
@@ -77,26 +155,49 @@ struct SpeakView: View {
     private var ready: Bool { choice == .kitten2 ? (k2.isInstalled && k2.runtimeLinked) : app.isInstalled(app.legacyVariant) }
     private var busy: Bool { app.busy || k2.busy }
     private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var cloneSelectable: Bool { k2.useClonedVoice || (k2.cloneStatus?.ok ?? false) }
+
+    private var voiceSelection: Binding<String> {
+        Binding(
+            get: { k2.useClonedVoice ? Self.cloneTag : k2.voice },
+            set: { value in
+                if value == Self.cloneTag { k2.useClonedVoice = true } else { k2.voice = value; k2.useClonedVoice = false }
+            })
+    }
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section { EngineSwitcher(engine: engine) }
-                if !ready { setupSection }
-                Section("What should it say?") {
-                    TextEditor(text: $text)
-                        .frame(minHeight: editorHeight)
-                        .accessibilityLabel("Text to speak")
-                    if text.isEmpty {
-                        Text("Type or paste some text, then tap Speak.").font(.footnote).foregroundStyle(.secondary)
+            CardScreen {
+                Card { EngineSwitcher(engine: engine) }
+                if !ready { setupCard }
+                Card("What should it say?") {
+                    ZStack(alignment: .topLeading) {
+                        TextEditor(text: $text)
+                            .focused($editing)
+                            .frame(minHeight: editorHeight)
+                            .scrollContentBackground(.hidden)
+                            .padding(8)
+                            .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .accessibilityLabel("Text to speak")
+                        if text.isEmpty {
+                            Text("Type or paste some text, then tap Speak.")
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 14).padding(.vertical, 16)
+                                .allowsHitTesting(false)
+                                .accessibilityHidden(true)
+                        }
+                    }
+                    HStack {
+                        Text("\(trimmed.count) characters").font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                        if !text.isEmpty {
+                            Button("Clear", role: .destructive) { text = "" }.font(.footnote)
+                        }
                     }
                 }
-                Section("Voice") {
-                    LabeledContent("Using", value: voiceName)
-                    Button("Change voice…") { tab = .voices }
-                }
-                Section {
-                    Button { speak() } label: {
+                Card("Voice") { voiceRow }
+                Card {
+                    Button { editing = false; speak() } label: {
                         Label("Speak", systemImage: "play.circle.fill").frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
@@ -107,28 +208,46 @@ struct SpeakView: View {
                     else { MessageView(app.status[.synthesis]) }
                     MessageView(app.status[.history])
                 }
-                if let latest = app.latest { resultSection(latest) }
+                if let latest = app.latest { resultCard(latest) }
             }
             .navigationTitle("KittenTTS")
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { editing = false }
+                }
+            }
         }
     }
 
-    private var voiceName: String {
-        if choice == .kitten2 { return k2.useClonedVoice ? "My cloned voice" : k2.voice }
-        return app.voice.displayName
+    @ViewBuilder private var voiceRow: some View {
+        if choice == .kitten2 {
+            Picker("Voice", selection: voiceSelection) {
+                if cloneSelectable { Text("My cloned voice").tag(Self.cloneTag) }
+                ForEach(Kitten2Package.presetVoices) { Text($0.displayName).tag($0.id) }
+            }
+            .pickerStyle(.menu)
+        } else {
+            Picker("Voice", selection: $app.voice) {
+                ForEach(KittenVoice.allCases) { Text($0.displayName).tag($0) }
+            }
+            .pickerStyle(.menu)
+        }
+        Button { tab = .voices } label: {
+            Label(choice == .kitten2 ? "Clone a voice or adjust voices…" : "Speaking speed and voice info…", systemImage: "person.wave.2")
+        }
+        .font(.footnote)
     }
 
-    @ViewBuilder private var setupSection: some View {
-        Section("Get started") {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(choice == .kitten2 ? "KittenTTS 2 is not on this device yet." : "KittenTTS 0.8 is not on this device yet.").font(.headline)
-                Text(choice == .kitten2
-                     ? (k2.runtimeLinked ? "Download it once in the Models tab. Everything afterwards runs on your device, offline."
-                                         : "This build of the app does not include the KittenTTS 2 speech engine, so it can’t be used here.")
-                     : "Download the small model in the Models tab (or switch to KittenTTS 2 above). Everything afterwards runs on your device.")
-                    .font(.subheadline).foregroundStyle(.secondary)
-                Button("Open Models") { tab = .models }.buttonStyle(.bordered)
-            }
+    @ViewBuilder private var setupCard: some View {
+        Card("Get started") {
+            Text(choice == .kitten2 ? "KittenTTS 2 is not on this device yet." : "KittenTTS 0.8 is not on this device yet.").font(.headline)
+            Text(choice == .kitten2
+                 ? (k2.runtimeLinked ? "Download it once in the Models tab. Everything afterwards runs on your device, offline."
+                                     : "This build of the app does not include the KittenTTS 2 speech engine, so it can’t be used here.")
+                 : "Download the small model in the Models tab (or switch to KittenTTS 2 above). Everything afterwards runs on your device.")
+                .font(.subheadline).foregroundStyle(.secondary)
+            Button("Open Models") { tab = .models }.buttonStyle(.bordered)
         }
     }
 
@@ -148,16 +267,16 @@ struct SpeakView: View {
         }
     }
 
-    @ViewBuilder private func resultSection(_ record: GenerationRecord) -> some View {
-        Section("Latest result") {
+    @ViewBuilder private func resultCard(_ record: GenerationRecord) -> some View {
+        Card("Latest result") {
             Text(record.text).lineLimit(3)
             Text("\(record.modelName) · \(record.voice) · \(String(format: "%.1f", record.duration)) s")
                 .font(.caption).foregroundStyle(.secondary)
             HStack {
                 if app.playingID == record.id {
-                    Button("Stop") { app.stopPlayback() }
+                    Button { app.stopPlayback() } label: { Label("Stop", systemImage: "stop.fill") }
                 } else {
-                    Button("Play again") { app.play(record) }
+                    Button { app.play(record) } label: { Label("Play again", systemImage: "play.fill") }
                 }
                 Spacer()
                 if let url = app.audioURL(record) { ShareLink("Save or share WAV", item: url) }
@@ -190,8 +309,8 @@ struct VoicesView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section { EngineSwitcher(engine: engine) }
+            CardScreen {
+                Card { EngineSwitcher(engine: engine) }
                 if engine.wrappedValue == .kitten2 { kitten2Voices } else { legacyVoices }
             }
             .navigationTitle("Voices")
@@ -199,16 +318,17 @@ struct VoicesView: View {
     }
 
     @ViewBuilder private var legacyVoices: some View {
-        Section("Voice") {
+        Card("Voice") {
             Picker("Voice", selection: $app.voice) {
                 ForEach(KittenVoice.allCases) { Text($0.displayName).tag($0) }
             }
+            .pickerStyle(.menu)
             VStack(alignment: .leading) {
                 Text("Speed: \(String(format: "%.1f", app.speed))×")
                 Slider(value: $app.speed, in: 0.5...2.0, step: 0.1).accessibilityLabel("Speaking speed")
             }
         }
-        Section {
+        Card {
             Text("KittenTTS 0.8 has 8 built-in voices. It cannot clone voices; switch to KittenTTS 2 for that.")
                 .font(.footnote).foregroundStyle(.secondary)
         }
@@ -219,23 +339,28 @@ struct VoicesView: View {
     }
 
     @ViewBuilder private var kitten2Voices: some View {
-        Section("Preset voice") {
+        Card("Preset voice") {
             Picker("Voice", selection: presetSelection) {
                 ForEach(Kitten2Package.presetVoices) { Text($0.displayName).tag($0.id) }
             }
-            Text("Voices named after a language are the multilingual presets. Only “Bruno” has been confirmed on a real device by the project; others come from the model’s preset list.")
+            .pickerStyle(.menu)
+            Text("Voices named after a language are the multilingual presets.")
                 .font(.footnote).foregroundStyle(.secondary)
         }
-        Section("Voice cloning (separate from the presets)") {
+        Card("Voice cloning (separate from the presets)") {
             NavigationLink {
                 CloneVoiceView()
             } label: {
                 Label(k2.reference == nil ? "Clone a voice…" : "Edit cloned voice…", systemImage: "person.crop.circle.badge.plus")
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             Toggle("Speak with my cloned voice", isOn: $k2.useClonedVoice)
                 .disabled(!(k2.cloneStatus?.ok ?? false))
             Text(k2.useClonedVoice ? "Speak uses your cloned voice." : "Speak uses the preset voice “\(k2.voice)”.")
                 .font(.footnote).foregroundStyle(.secondary)
+            if k2.transcriptDraft.needsReview {
+                Callout(text: "Your cloned voice is waiting for you to review its transcript.")
+            }
         }
     }
 }
@@ -243,22 +368,36 @@ struct VoicesView: View {
 struct CloneVoiceView: View {
     @EnvironmentObject var k2: Kitten2Model
     @State private var pickingAudio = false
+    @FocusState private var transcriptFocused: Bool
 
-    var body: some View {
-        Form { cloneSection }
-            .navigationTitle("Clone a voice")
-            .navigationBarTitleDisplayMode(.inline)
-            .fileImporter(isPresented: $pickingAudio, allowedContentTypes: [.audio], allowsMultipleSelection: false) { result in
-                switch result {
-                case .success(let urls): if let url = urls.first { k2.importReference(url) }
-                case .failure(let error): k2.post("Could not open the file: \(error.localizedDescription)", for: .referenceAudio, error: true)
-                }
-            }
+    private var transcriptBinding: Binding<String> {
+        Binding(get: { k2.transcriptDraft.text }, set: { k2.transcriptDraft.userEdited($0) })
     }
 
-    @ViewBuilder private var cloneSection: some View {
-        Section {
-            Text("Record or choose 1–30 seconds of one person speaking clearly, then type exactly what they say. Only clone voices you have the right to use. The app does not transcribe audio for you.")
+    var body: some View {
+        CardScreen {
+            captureCard
+            if let clip = k2.reference { clipCard(clip) }
+        }
+        .navigationTitle("Clone a voice")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { transcriptFocused = false }
+            }
+        }
+        .fileImporter(isPresented: $pickingAudio, allowedContentTypes: [.audio], allowsMultipleSelection: false) { result in
+            switch result {
+            case .success(let urls): if let url = urls.first { k2.importReference(url) }
+            case .failure(let error): k2.post("Could not open the file: \(error.localizedDescription)", for: .referenceAudio, error: true)
+            }
+        }
+    }
+
+    @ViewBuilder private var captureCard: some View {
+        Card("1. Record or choose a clip") {
+            Text("Use 1–30 seconds of one person speaking clearly. Only clone voices you have the right to use.")
                 .font(.footnote).foregroundStyle(.secondary)
             if k2.phase == .recording {
                 HStack {
@@ -268,32 +407,70 @@ struct CloneVoiceView: View {
                 Button("Stop recording") { k2.stopRecording() }.buttonStyle(.borderedProminent)
             } else {
                 Button { k2.startRecording() } label: { Label(k2.reference == nil ? "Record with microphone" : "Record again", systemImage: "mic.fill") }
+                    .buttonStyle(.bordered)
                     .disabled(k2.busy)
                 Button { pickingAudio = true } label: { Label("Choose an audio file…", systemImage: "folder") }
+                    .buttonStyle(.bordered)
                     .disabled(k2.busy)
             }
             MessageView(k2.status[.referenceAudio])
         }
-        if let clip = k2.reference {
-            Section("Reference clip") {
-                LabeledContent(k2.referenceName, value: String(format: "%.1f", clip.duration) + " s")
-                HStack {
-                    Button(k2.previewing ? "Stop preview" : "Preview clip") { k2.togglePreview() }
-                    Spacer()
-                    Button("Remove", role: .destructive) { k2.clearReference() }
+    }
+
+    @ViewBuilder private func clipCard(_ clip: ReferenceClip) -> some View {
+        Card("Reference clip") {
+            LabeledContent(k2.referenceName, value: String(format: "%.1f", clip.duration) + " s")
+            HStack {
+                Button { k2.togglePreview() } label: {
+                    Label(k2.previewing ? "Stop preview" : "Preview clip", systemImage: k2.previewing ? "stop.fill" : "play.fill")
+                }
+                Spacer()
+                Button("Remove", role: .destructive) { k2.clearReference() }
+            }
+            .buttonStyle(.bordered)
+            MessageView(k2.status[.playback])
+        }
+        Card("2. Transcript of the clip") {
+            Callout(text: TranscriptCopy.reviewCue)
+            TextEditor(text: transcriptBinding)
+                .focused($transcriptFocused)
+                .frame(minHeight: 110)
+                .scrollContentBackground(.hidden)
+                .padding(8)
+                .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .accessibilityLabel("Transcript of the reference clip")
+            HStack {
+                Button {
+                    transcriptFocused = false
+                    k2.transcribeReference(replacingTyped: true)
+                } label: {
+                    Label(k2.transcriptDraft.isEmpty ? "Transcribe automatically" : "Transcribe again", systemImage: "text.badge.checkmark")
                 }
                 .buttonStyle(.bordered)
-                MessageView(k2.status[.playback])
-                Text("What is said in the clip").font(.subheadline)
-                TextEditor(text: $k2.transcript)
-                    .frame(minHeight: 80)
-                    .accessibilityLabel("Transcript of the reference clip")
-                if let status = k2.cloneStatus {
-                    Text(status.text).font(.footnote).foregroundStyle(status.ok ? Color.secondary : Color.red)
-                }
-                Toggle("Speak with my cloned voice", isOn: $k2.useClonedVoice)
-                    .disabled(!(k2.cloneStatus?.ok ?? false))
+                .disabled(k2.isTranscribing || k2.busy)
+                if k2.isTranscribing { ProgressView().padding(.leading, 4) }
             }
+            if k2.isTranscribing {
+                Text("Transcribing on this device…").font(.footnote).foregroundStyle(.secondary)
+            }
+            if let note = k2.transcriptionNote {
+                Label(note, systemImage: "info.circle").font(.footnote).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if k2.transcriptDraft.needsReview {
+                Button { transcriptFocused = false; k2.confirmTranscript() } label: {
+                    Label("It matches what is said", systemImage: "checkmark.circle")
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            if let status = k2.cloneStatus {
+                Label(status.text, systemImage: status.ok ? "checkmark.seal" : "exclamationmark.triangle")
+                    .font(.footnote).foregroundStyle(status.ok ? Color.secondary : Color.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Text(TranscriptCopy.privacyNote).font(.caption).foregroundStyle(.secondary)
+            Toggle("Speak with my cloned voice", isOn: $k2.useClonedVoice)
+                .disabled(!(k2.cloneStatus?.ok ?? false))
         }
     }
 }
@@ -574,35 +751,45 @@ struct HistoryView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                MessageView(app.status[.playback])
-                MessageView(app.status[.history])
+            Group {
                 if app.history.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(spacing: 12) {
+                        Image(systemName: "waveform.badge.plus").font(.largeTitle).foregroundStyle(.secondary).accessibilityHidden(true)
                         Text("Nothing here yet").font(.headline)
-                        Text("Speech you generate is saved here so you can play it again or save the WAV file.").foregroundStyle(.secondary)
+                        Text("Speech you generate is saved here so you can play it again or save the WAV file.")
+                            .multilineTextAlignment(.center).foregroundStyle(.secondary)
+                        MessageView(app.status[.history])
                     }
-                    .padding(.vertical, 8)
-                }
-                ForEach(app.history) { record in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(record.text).lineLimit(3)
-                        Text("\(record.modelName) · \(record.voice) · \(String(format: "%.1f", record.duration)) s · \(record.date.formatted(date: .abbreviated, time: .shortened))")
-                            .font(.caption).foregroundStyle(.secondary)
-                        HStack {
-                            if app.playingID == record.id {
-                                Button("Stop") { app.stopPlayback() }
-                            } else {
-                                Button("Play") { app.play(record) }
+                    .padding(32)
+                    .frame(maxWidth: Theme.maxContentWidth, maxHeight: .infinity)
+                } else {
+                    List {
+                        MessageView(app.status[.playback])
+                        MessageView(app.status[.history])
+                        ForEach(app.history) { record in
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(record.text).lineLimit(3)
+                                Text("\(record.modelName) · \(record.voice) · \(String(format: "%.1f", record.duration)) s · \(record.date.formatted(date: .abbreviated, time: .shortened))")
+                                    .font(.caption).foregroundStyle(.secondary)
+                                HStack {
+                                    if app.playingID == record.id {
+                                        Button { app.stopPlayback() } label: { Label("Stop", systemImage: "stop.fill") }
+                                    } else {
+                                        Button { app.play(record) } label: { Label("Play", systemImage: "play.fill") }
+                                    }
+                                    Spacer()
+                                    if let url = app.audioURL(record) { ShareLink("Export WAV", item: url) }
+                                }
+                                .buttonStyle(.bordered)
                             }
-                            Spacer()
-                            if let url = app.audioURL(record) { ShareLink("Export WAV", item: url) }
+                            .padding(.vertical, 4)
+                            .swipeActions { Button("Delete", role: .destructive) { app.delete(record) } }
                         }
-                        .buttonStyle(.bordered)
                     }
-                    .swipeActions { Button("Delete", role: .destructive) { app.delete(record) } }
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
             .navigationTitle("History")
             .toolbar {
                 if !app.history.isEmpty {

@@ -35,7 +35,9 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
     // voice cloning
     @Published var reference: ReferenceClip?
     @Published var referenceName = ""
-    @Published var transcript = ""
+    @Published var transcriptDraft = TranscriptDraft()
+    @Published var isTranscribing = false
+    @Published var transcriptionNote: String?
     @Published var recordingSeconds: TimeInterval = 0
     @Published var previewing = false
 
@@ -51,6 +53,7 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
     private var recorder = ReferenceRecorder()
     private var recordingTimer: Task<Void, Never>?
     private var previewPlayer: AVAudioPlayer?
+    private var transcriptionTask: Task<Void, Never>?
     private let stderrPath = NSTemporaryDirectory() + "kt-native-stderr.log"
 
     let installDirectory: URL
@@ -91,7 +94,8 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
     var isDownloading: Bool { if case .downloading = phase { return true }; return false }
     var modelURL: URL { activeModel?.url ?? InstalledModels.fileURL(modelFile, in: installDirectory) }
     var isImporting: Bool { if case .importing = phase { return true }; return false }
-    var canSpeakWithCloneVoice: Bool { reference != nil && !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    var transcript: String { transcriptDraft.text }
+    var canSpeakWithCloneVoice: Bool { reference != nil && transcriptDraft.isUsable }
 
     /// Posts or (with nil) clears the message of one operation; other operations' messages are untouched.
     func post(_ text: String?, for operation: Kitten2Operation, error: Bool = false) {
@@ -298,6 +302,9 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
                 let started = Date()
                 if useClone {
                     guard let reference else { throw NativeEngineError(message: "Record or choose a reference clip in Voices first.") }
+                    if transcriptDraft.needsReview {
+                        throw NativeEngineError(message: "Review the automatic transcript in Voices first: listen to the clip, correct any mistakes, then confirm it.")
+                    }
                     let checked = try CloneInput.validate(clip: reference, transcript: transcript)
                     let text = try SynthesisInput.validatePreset(text: rawText, voice: Kitten2Package.defaultVoice)
                     try await ensureLoaded()
@@ -358,13 +365,54 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
         _ = try ReferenceAudioIO.writePreview(clip)
         reference = clip
         referenceName = name
-        post(String(format: "Reference ready (%.1f s). Now type exactly what is said in it.", clip.duration), for: .referenceAudio)
+        transcriptionTask?.cancel()
+        isTranscribing = false
+        transcriptDraft.clipChanged()
+        transcriptionNote = nil
+        post(String(format: "Reference ready (%.1f s). Transcribe it or type exactly what is said in it.", clip.duration), for: .referenceAudio)
+        if transcriptDraft.isEmpty { transcribeReference() }
     }
 
     func clearReference() {
         stopPreview()
+        transcriptionTask?.cancel()
+        isTranscribing = false
+        transcriptionNote = nil
+        transcriptDraft.clipChanged()
         reference = nil; referenceName = ""; useClonedVoice = false
     }
+
+    // MARK: Automatic transcript
+
+    /// Drafts the transcript with on-device speech recognition. The result is only a draft the person must review.
+    /// `replacingTyped` is true when the person explicitly asks to transcribe again.
+    func transcribeReference(replacingTyped: Bool = false) {
+        guard reference != nil, !isTranscribing else { return }
+        isTranscribing = true
+        transcriptionNote = nil
+        let url = ReferenceAudioIO.previewURL()
+        transcriptionTask = Task { [weak self] in
+            let outcome: ReferenceTranscriber.Outcome?
+            var failure: String?
+            do { outcome = try await ReferenceTranscriber.transcribe(fileAt: url) }
+            catch is CancellationError { outcome = nil }
+            catch { outcome = nil; failure = "Automatic transcription failed (\(error.localizedDescription)). Type the transcript yourself." }
+            guard let self, !Task.isCancelled else { return }
+            isTranscribing = false
+            if let failure { transcriptionNote = failure; return }
+            switch outcome {
+            case .text(let text)?:
+                if !transcriptDraft.applyRecognized(text, replacingTyped: replacingTyped) {
+                    transcriptionNote = "Automatic transcription finished, but your own text was kept. Tap Transcribe again to replace it."
+                }
+            case .unavailable(let why)?: transcriptionNote = why.message
+            case .nothingRecognized?: transcriptionNote = "No speech was recognized in the clip. Type the transcript yourself."
+            case nil: break
+            }
+        }
+    }
+
+    func confirmTranscript() { transcriptDraft.confirm() }
 
     func startRecording() {
         guard !busy else { return }
@@ -438,6 +486,7 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
     /// Validation shown live under the clone form.
     var cloneStatus: (ok: Bool, text: String)? {
         guard let reference else { return nil }
+        if transcriptDraft.needsReview { return (false, "Review the transcript below, then tap “It matches” (or edit it) to use this voice.") }
         do {
             let checked = try CloneInput.validate(clip: reference, transcript: transcript)
             return (true, checked.warnings.isEmpty ? "Ready to use." : checked.warnings.joined(separator: " "))
@@ -468,6 +517,9 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
         ]
         if let s = lastLoadSeconds { lines.append(String(format: "last model load: %.1f s", s)) }
         if let n = lastSynthesisNote { lines.append(n) }
+        if let stats = engine.stats {
+            lines.append("native sessions created: \(stats.sessions_created); reset after a failed request: \(stats.sessions_reset); failed requests: \(stats.failures); completed: \(stats.completed)")
+        }
         if let p = previousRunNote { lines.append(p) }
         return lines.joined(separator: "\n")
     }
