@@ -159,6 +159,8 @@ public struct Kitten2Importer: Sendable {
 
         let record = Kitten2ImportRecord(originalName: source.lastPathComponent, size: size, sha256: digest, checksumVerified: verified, importedAt: Date())
         let destination = installDirectory.appendingPathComponent(Kitten2Library.importedFileName)
+        // A record that no longer describes the file must never outlive the replacement.
+        try? fm.removeItem(at: installDirectory.appendingPathComponent(Kitten2Library.importedRecordName))
         do {
             if fm.fileExists(atPath: destination.path) { _ = try fm.replaceItemAt(destination, withItemAt: partial) }
             else { try fm.moveItem(at: partial, to: destination) }

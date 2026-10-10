@@ -33,16 +33,17 @@ struct ContentView: View {
 // MARK: - Shared pieces
 
 struct MessageView: View {
-    let text: String?
-    let isError: Bool
+    let message: StatusMessage?
+
+    init(_ message: StatusMessage?) { self.message = message }
 
     var body: some View {
-        if let text {
-            Text(text)
+        if let message {
+            Text(message.text)
                 .font(.footnote)
-                .foregroundStyle(isError ? Color.red : Color.secondary)
+                .foregroundStyle(message.isError ? Color.red : Color.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-                .accessibilityLabel(isError ? "Error: \(text)" : text)
+                .accessibilityLabel(message.isError ? "Error: \(message.text)" : message.text)
         }
     }
 }
@@ -102,8 +103,9 @@ struct SpeakView: View {
                     .controlSize(.large)
                     .disabled(!ready || busy || trimmed.isEmpty)
                     progressView
-                    if choice == .kitten2 { MessageView(text: k2.message, isError: k2.messageIsError) }
-                    else { MessageView(text: app.message, isError: app.messageIsError) }
+                    if choice == .kitten2 { MessageView(k2.status[.synthesis]) }
+                    else { MessageView(app.status[.synthesis]) }
+                    MessageView(app.status[.history])
                 }
                 if let latest = app.latest { resultSection(latest) }
             }
@@ -161,6 +163,7 @@ struct SpeakView: View {
                 if let url = app.audioURL(record) { ShareLink("Save or share WAV", item: url) }
             }
             .buttonStyle(.bordered)
+            MessageView(app.status[.playback])
         }
     }
 
@@ -180,7 +183,6 @@ struct VoicesView: View {
     @EnvironmentObject var app: AppModel
     @EnvironmentObject var k2: Kitten2Model
     @AppStorage("kt.engine") private var engineRaw = EngineChoice.kitten2.rawValue
-    @State private var pickingAudio = false
 
     private var engine: Binding<EngineChoice> {
         Binding(get: { EngineChoice(rawValue: engineRaw) ?? .kitten2 }, set: { engineRaw = $0.rawValue })
@@ -193,12 +195,6 @@ struct VoicesView: View {
                 if engine.wrappedValue == .kitten2 { kitten2Voices } else { legacyVoices }
             }
             .navigationTitle("Voices")
-            .fileImporter(isPresented: $pickingAudio, allowedContentTypes: [.audio], allowsMultipleSelection: false) { result in
-                switch result {
-                case .success(let urls): if let url = urls.first { k2.importReference(url) }
-                case .failure(let error): k2.show("Could not open the file: \(error.localizedDescription)", error: true)
-                }
-            }
         }
     }
 
@@ -218,29 +214,50 @@ struct VoicesView: View {
         }
     }
 
+    private var presetSelection: Binding<String> {
+        Binding(get: { k2.voice }, set: { k2.voice = $0; k2.useClonedVoice = false })
+    }
+
     @ViewBuilder private var kitten2Voices: some View {
-        Section("Built-in voices") {
-            ForEach(Kitten2Package.presetVoices) { preset in
-                Button {
-                    k2.voice = preset.id
-                    k2.useClonedVoice = false
-                } label: {
-                    HStack {
-                        Text(preset.displayName)
-                        Spacer()
-                        if !k2.useClonedVoice && k2.voice == preset.id { Image(systemName: "checkmark").accessibilityLabel("Selected") }
-                    }
-                }
-                .foregroundStyle(.primary)
+        Section("Preset voice") {
+            Picker("Voice", selection: presetSelection) {
+                ForEach(Kitten2Package.presetVoices) { Text($0.displayName).tag($0.id) }
             }
             Text("Voices named after a language are the multilingual presets. Only “Bruno” has been confirmed on a real device by the project; others come from the model’s preset list.")
                 .font(.footnote).foregroundStyle(.secondary)
         }
-        cloneSection
+        Section("Voice cloning (separate from the presets)") {
+            NavigationLink {
+                CloneVoiceView()
+            } label: {
+                Label(k2.reference == nil ? "Clone a voice…" : "Edit cloned voice…", systemImage: "person.crop.circle.badge.plus")
+            }
+            Toggle("Speak with my cloned voice", isOn: $k2.useClonedVoice)
+                .disabled(!(k2.cloneStatus?.ok ?? false))
+            Text(k2.useClonedVoice ? "Speak uses your cloned voice." : "Speak uses the preset voice “\(k2.voice)”.")
+                .font(.footnote).foregroundStyle(.secondary)
+        }
+    }
+}
+
+struct CloneVoiceView: View {
+    @EnvironmentObject var k2: Kitten2Model
+    @State private var pickingAudio = false
+
+    var body: some View {
+        Form { cloneSection }
+            .navigationTitle("Clone a voice")
+            .navigationBarTitleDisplayMode(.inline)
+            .fileImporter(isPresented: $pickingAudio, allowedContentTypes: [.audio], allowsMultipleSelection: false) { result in
+                switch result {
+                case .success(let urls): if let url = urls.first { k2.importReference(url) }
+                case .failure(let error): k2.post("Could not open the file: \(error.localizedDescription)", for: .referenceAudio, error: true)
+                }
+            }
     }
 
     @ViewBuilder private var cloneSection: some View {
-        Section("Clone a voice") {
+        Section {
             Text("Record or choose 1–30 seconds of one person speaking clearly, then type exactly what they say. Only clone voices you have the right to use. The app does not transcribe audio for you.")
                 .font(.footnote).foregroundStyle(.secondary)
             if k2.phase == .recording {
@@ -255,16 +272,18 @@ struct VoicesView: View {
                 Button { pickingAudio = true } label: { Label("Choose an audio file…", systemImage: "folder") }
                     .disabled(k2.busy)
             }
-            if k2.reference != nil {
-                if let clip = k2.reference {
-                    LabeledContent(k2.referenceName, value: String(format: "%.1f s", clip.duration))
-                }
+            MessageView(k2.status[.referenceAudio])
+        }
+        if let clip = k2.reference {
+            Section("Reference clip") {
+                LabeledContent(k2.referenceName, value: String(format: "%.1f", clip.duration) + " s")
                 HStack {
                     Button(k2.previewing ? "Stop preview" : "Preview clip") { k2.togglePreview() }
                     Spacer()
                     Button("Remove", role: .destructive) { k2.clearReference() }
                 }
                 .buttonStyle(.bordered)
+                MessageView(k2.status[.playback])
                 Text("What is said in the clip").font(.subheadline)
                 TextEditor(text: $k2.transcript)
                     .frame(minHeight: 80)
@@ -275,7 +294,6 @@ struct VoicesView: View {
                 Toggle("Speak with my cloned voice", isOn: $k2.useClonedVoice)
                     .disabled(!(k2.cloneStatus?.ok ?? false))
             }
-            MessageView(text: k2.message, isError: k2.messageIsError)
         }
     }
 }
@@ -286,8 +304,11 @@ struct ModelsView: View {
     @EnvironmentObject var app: AppModel
     @EnvironmentObject var k2: Kitten2Model
     @State private var pickingLegacy = false
+    @State private var pickingKitten2 = false
     @State private var confirmDelete = false
     @State private var confirmDiscard = false
+
+    private static let ggufType = UTType(filenameExtension: "gguf") ?? .data
 
     var body: some View {
         NavigationStack {
@@ -297,17 +318,11 @@ struct ModelsView: View {
                 settingsSection
             }
             .navigationTitle("Models")
-            .confirmationDialog("Download KittenTTS 2?", isPresented: $k2.showDownloadConfirmation, titleVisibility: .visible) {
-                Button("Download on Wi-Fi only") { k2.startDownload(allowCellular: false) }
-                Button("Allow mobile data too") { k2.startDownload(allowCellular: true) }
-                Button("Not now", role: .cancel) {}
-            } message: {
-                Text("This is a one-time download of about \(sizeText) from huggingface.co/dignome/kitten_tts2. You have \(freeSpaceText) free. Mobile data charges may apply if you allow it. You can pause and resume. By downloading you acknowledge the model’s Stellon Labs Community License.")
-            }
-            .confirmationDialog("Delete KittenTTS 2 from this device?", isPresented: $confirmDelete, titleVisibility: .visible) {
-                Button("Delete", role: .destructive) { k2.deleteModel() }
+            .sheet(isPresented: $k2.showDownloadConfirmation) { DownloadConsentView() }
+            .confirmationDialog("Remove KittenTTS 2 from this device?", isPresented: $confirmDelete, titleVisibility: .visible) {
+                Button("Remove", role: .destructive) { k2.deleteModel() }
                 Button("Keep", role: .cancel) {}
-            } message: { Text("You can download it again later.") }
+            } message: { Text("You can download or import it again later.") }
             .confirmationDialog("Remove the partial download?", isPresented: $confirmDiscard, titleVisibility: .visible) {
                 Button("Remove", role: .destructive) { k2.cancelDownloadAndDiscard() }
                 Button("Keep", role: .cancel) {}
@@ -315,7 +330,13 @@ struct ModelsView: View {
             .fileImporter(isPresented: $pickingLegacy, allowedContentTypes: [.data], allowsMultipleSelection: true) { result in
                 switch result {
                 case .success(let urls): app.importFiles(urls)
-                case .failure(let error): app.show("Could not open files: \(error.localizedDescription)", error: true)
+                case .failure(let error): app.post("Could not open files: \(error.localizedDescription)", for: .modelSetup, error: true)
+                }
+            }
+            .fileImporter(isPresented: $pickingKitten2, allowedContentTypes: [Self.ggufType, .data], allowsMultipleSelection: false) { result in
+                switch result {
+                case .success(let urls): if let url = urls.first { k2.importModel(from: url) }
+                case .failure(let error): k2.importFailed("Could not open the file: \(error.localizedDescription)")
                 }
             }
         }
@@ -326,16 +347,11 @@ struct ModelsView: View {
     @ViewBuilder private var kitten2Section: some View {
         Section("KittenTTS 2 – best quality") {
             if !k2.runtimeLinked {
-                Text("This build of the app does not include the KittenTTS 2 speech engine, so downloading it would not be useful. Install the CI-built IPA instead.")
+                Text("This build of the app does not include the KittenTTS 2 speech engine, so downloading or importing a model would not be useful. Install the full-app build instead.")
                     .font(.footnote).foregroundStyle(.red)
             }
-            if k2.isInstalled {
-                Label("Ready on this device (\(sizeText))", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-                if k2.isLoaded {
-                    Button("Free memory") { Task { await k2.unload(reason: "KittenTTS 2 was released from memory. It reloads on the next use.") } }
-                        .disabled(k2.busy)
-                }
-                Button("Delete from this device", role: .destructive) { confirmDelete = true }.disabled(k2.busy)
+            if let model = k2.activeModel {
+                installedRows(model)
             } else if case .downloading(let progress) = k2.phase {
                 VStack(alignment: .leading, spacing: 6) {
                     ProgressView(value: progress.fraction)
@@ -346,27 +362,51 @@ struct ModelsView: View {
                 if progress.stage == .downloading {
                     Button("Cancel and remove partial download", role: .destructive) { confirmDiscard = true }
                 }
+            } else if case .importing(let fraction) = k2.phase {
+                ProgressView("Importing…", value: fraction)
+                Button("Cancel import", role: .destructive) { k2.cancelImport() }
             } else {
+                Label("Not on this device yet", systemImage: "arrow.down.circle").foregroundStyle(.secondary)
                 let partial = k2.partialBytes
                 if partial > 0 {
                     Text("Paused at \(ByteCountFormatter.string(fromByteCount: partial, countStyle: .file)) of \(sizeText).").font(.footnote)
                     Button("Resume download") { k2.showDownloadConfirmation = true }.disabled(k2.busy || !k2.runtimeLinked)
                     Button("Discard partial download", role: .destructive) { confirmDiscard = true }
                 } else {
-                    Button("Download KittenTTS 2 (\(sizeText))") { k2.showDownloadConfirmation = true }
+                    Button("Download from Hugging Face (\(sizeText))") { k2.showDownloadConfirmation = true }
                         .disabled(k2.busy || !k2.runtimeLinked)
                 }
             }
-            MessageView(text: k2.message, isError: k2.messageIsError)
-            Text(Kitten2Package.attribution).font(.footnote).foregroundStyle(.secondary)
-            Text("License: \(Kitten2Package.licenseName). The full license and NOTICE ship inside the downloaded model file.")
+            if !k2.isInstalled && !k2.isImporting && !k2.isDownloading {
+                Button("Import a KittenTTS 2 file from Files…") { pickingKitten2 = true }.disabled(k2.busy || !k2.runtimeLinked)
+            }
+            MessageView(k2.status[.modelDownload])
+            MessageView(k2.status[.modelImport])
+            Text("Compatible file: the audio.cpp single-file KittenTTS 2 package (\(AudioCppPackage.publishedFileName)). Other GGUF files are not supported. KittenML’s own TQ2_1 GGUF uses a different runtime and cannot be imported here.")
                 .font(.footnote).foregroundStyle(.secondary)
             Link("Model page on Hugging Face", destination: Kitten2Package.repositoryPage)
         }
     }
 
-    private var freeSpaceText: String {
-        k2.freeDiskBytes.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "an unknown amount of"
+    @ViewBuilder private func installedRows(_ model: Kitten2InstalledModel) -> some View {
+        let size = ByteCountFormatter.string(fromByteCount: model.size, countStyle: .file)
+        switch model.source {
+        case .downloaded:
+            Label("Downloaded from Hugging Face (\(size))", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+            Text("Verified against the published checksum.").font(.footnote).foregroundStyle(.secondary)
+        case .imported(let record):
+            Label("Imported from Files (\(size))", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+            if let record {
+                Text("“\(record.originalName)” · " + (record.checksumVerified ? "matches the published checksum." : "different export; checksum not comparable."))
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+        }
+        if k2.isLoaded {
+            Button("Free memory") { Task { await k2.unload(reason: "KittenTTS 2 was released from memory. It reloads on the next use.") } }
+                .disabled(k2.busy)
+        }
+        Button("Import a different file from Files…") { pickingKitten2 = true }.disabled(k2.busy || !k2.runtimeLinked)
+        Button("Remove from this device", role: .destructive) { confirmDelete = true }.disabled(k2.busy)
     }
 
     private func progressText(_ p: DownloadProgress) -> String {
@@ -397,19 +437,69 @@ struct ModelsView: View {
             default: EmptyView()
             }
             if case .importing = app.phase { Button("Cancel import", role: .destructive) { app.cancelCurrentImport() } }
-            MessageView(text: app.message, isError: app.messageIsError)
+            MessageView(app.status[.modelSetup])
             Text("Pick the .onnx model and its voices.npz together from the matching KittenML/kitten-tts-*-0.8 repository.")
+                .font(.footnote).foregroundStyle(.secondary)
+            Link("\(app.legacyVariant.displayName) on Hugging Face", destination: app.legacyVariant.repositoryPage)
+            Menu("All original KittenTTS 0.8 models") {
+                ForEach(LegacyVariant.allCases) { variant in
+                    Link(variant.displayName, destination: variant.repositoryPage)
+                }
+                Link("KittenML on Hugging Face", destination: LegacyVariant.organizationPage)
+            }
+            Text("The original lightweight family is KittenTTS 0.8 (often called “KittenTTS 1”).")
                 .font(.footnote).foregroundStyle(.secondary)
         }
     }
 
     @ViewBuilder private var settingsSection: some View {
         Section("About this app") {
-            NavigationLink("Memory and diagnostics") { DiagnosticsView() }
             NavigationLink("Licenses and credits") { LicensesView() }
-            Text("Runs on iPhone and iPad (iOS 16.4 or later). A native Mac version, Android and other platforms are not available yet.")
+            NavigationLink("Advanced: memory and diagnostics") { DiagnosticsView() }
+            Text("Runs on iPhone and iPad (iOS 16.4 or later). Memory, storage and speed vary by device, and iOS may close the app when memory runs out. A native Mac version, Android and other platforms are not available.")
                 .font(.footnote).foregroundStyle(.secondary)
         }
+    }
+}
+
+/// Short consent shown before the multi-GB download; the full license text lives in Licenses.
+struct DownloadConsentView: View {
+    @EnvironmentObject var k2: Kitten2Model
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        let storage = k2.downloadStorage
+        let fmt = { (b: Int64) in ByteCountFormatter.string(fromByteCount: b, countStyle: .file) }
+        NavigationStack {
+            Form {
+                Section {
+                    Text("This is a one-time download from huggingface.co/\(Kitten2Package.repository). You can pause and resume it. Mobile data charges may apply if you allow mobile data.")
+                    LabeledContent("Still to download", value: fmt(k2.modelFile.size - storage.alreadyPresentBytes))
+                    LabeledContent("Free on this device", value: storage.availableBytes.map(fmt) ?? "unknown")
+                    if storage.outcome == .insufficient, let shortfall = storage.shortfall {
+                        Text("About \(fmt(shortfall)) more storage is needed (including working space). Free up space, then try again.")
+                            .font(.footnote).foregroundStyle(.red)
+                    }
+                }
+                Section {
+                    Text("By downloading you agree to the model’s license terms.")
+                    NavigationLink("Read the full license") { LicensesView() }
+                }
+                Section {
+                    Button("Download on Wi-Fi only") { start(cellular: false) }
+                    Button("Allow mobile data too") { start(cellular: true) }
+                }
+                .disabled(storage.outcome == .insufficient)
+            }
+            .navigationTitle("Download KittenTTS 2?")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Not now") { dismiss() } } }
+        }
+    }
+
+    private func start(cellular: Bool) {
+        dismiss()
+        k2.startDownload(allowCellular: cellular)
     }
 }
 
@@ -445,8 +535,33 @@ struct LicensesView: View {
     }
 
     var body: some View {
-        ScrollView {
-            Text(notices).font(.footnote).textSelection(.enabled).padding()
+        List {
+            Section("In plain language") {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("This app").font(.headline)
+                    Text("The app’s own code is open source under the MIT license.").font(.footnote).foregroundStyle(.secondary)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("KittenTTS 2 model").font(.headline)
+                    Text("\(Kitten2Package.attribution) Its license is the \(Kitten2Package.licenseName). The complete license and NOTICE are embedded in the model file and published with the model. Downloading or importing the model means you agree to follow them.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                    Link("Model page on Hugging Face", destination: Kitten2Package.repositoryPage)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("KittenTTS 0.8 (original) models").font(.headline)
+                    Text("Each original model is published by KittenML on Hugging Face under the terms stated on its page.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                    Link("KittenML on Hugging Face", destination: LegacyVariant.organizationPage)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Speech engines and libraries").font(.headline)
+                    Text("KittenTTS 2 runs on audio.cpp and ggml; KittenTTS 0.8 uses the KittenTTS Swift SDK and ONNX Runtime. Their notices are listed below and in the app bundle.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+            }
+            Section("Full notices") {
+                Text(notices).font(.footnote).textSelection(.enabled)
+            }
         }
         .navigationTitle("Licenses")
     }
@@ -460,6 +575,8 @@ struct HistoryView: View {
     var body: some View {
         NavigationStack {
             List {
+                MessageView(app.status[.playback])
+                MessageView(app.status[.history])
                 if app.history.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Nothing here yet").font(.headline)
