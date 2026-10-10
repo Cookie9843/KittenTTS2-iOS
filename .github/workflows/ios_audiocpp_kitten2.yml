@@ -1,9 +1,8 @@
-name: iOS audio.cpp KittenTTS 2 test IPA + full app IPA
+name: iOS audio.cpp runtime + full app IPA
 
-# Builds the REAL audio.cpp kitten_tts2 CPU runtime for iOS arm64 and links it into (a) the unsigned diagnostic test app and
-# (b) the unsigned full KittenTTS app (iPhone + iPad).
+# Builds the REAL audio.cpp kitten_tts2 CPU runtime for iOS arm64 and links it into the unsigned full KittenTTS app (iPhone + iPad).
 # CI proves compilation/linking only. Model load and audio generation can only be proven on a device with the
-# user's kitten-tts2-native-q8-multilingual.gguf; the model is never downloaded or committed.
+# compatible kitten-tts2-native-q8-multilingual.gguf; the model is never downloaded or committed.
 # Any failing step fails the job (no continue-on-error).
 on:
   workflow_dispatch:
@@ -20,7 +19,6 @@ on:
       - scripts/patches/**
       - Sources/KittenCore/WAVEncoder.swift
       - scripts/build_audiocpp_ios.sh
-      - scripts/build_audiocpp_test_ipa.sh
       - scripts/cmake/**
       - THIRD_PARTY_NOTICES.md
       - .github/workflows/ios_audiocpp_kitten2.yml
@@ -34,7 +32,6 @@ on:
       - Package.swift
       - scripts/build_app_ipa.sh
       - scripts/build_audiocpp_ios.sh
-      - scripts/build_audiocpp_test_ipa.sh
       - scripts/cmake/**
       - scripts/patches/**
       - .github/workflows/ios_audiocpp_kitten2.yml
@@ -83,24 +80,6 @@ jobs:
       - name: Require native build verification line
         run: |
           grep -q '^RESULT: audio.cpp kitten_tts2 CPU runtime + C ABI built for iOS arm64' "$LOG_DIR/build_audiocpp_ios.log"
-      - name: Link and package unsigned test IPA
-        run: |
-          set -o pipefail
-          ./scripts/build_audiocpp_test_ipa.sh 2>&1 | tee "$LOG_DIR/build_audiocpp_test_ipa.log"
-      - name: Require link verification line
-        run: |
-          grep -q '^RESULT: unsigned test IPA linked against audio.cpp kitten_tts2 runtime' "$LOG_DIR/build_audiocpp_test_ipa.log"
-      - name: Inspect IPA contents (no model weights)
-        run: |
-          set -o pipefail
-          unzip -l "$OUT/KittenTTS2AudioCppTest-unsigned.ipa" | tee "$LOG_DIR/ipa-contents.txt"
-          if grep -qi '\.gguf' "$LOG_DIR/ipa-contents.txt"; then echo "model weights found in IPA" >&2; exit 1; fi
-      - name: Upload unsigned test IPA
-        uses: actions/upload-artifact@v4
-        with:
-          name: KittenTTS2AudioCppTest-unsigned-ipa
-          path: ${{ runner.temp }}/audiocpp-ipa/KittenTTS2AudioCppTest-unsigned.ipa
-          if-no-files-found: error
       - name: Build unsigned full app IPA (iPhone + iPad) linked against the same runtime
         run: |
           set -o pipefail
@@ -123,17 +102,17 @@ jobs:
         if: always()
         run: |
           {
-            echo "### audio.cpp KittenTTS 2 iOS test IPA"
+            echo "### audio.cpp KittenTTS 2 iOS full-app IPA"
             echo "| Stage | Evidence |"
             echo "| --- | --- |"
             echo "| Metadata validation | swift test (fixtures), runs in the app on the selected GGUF |"
             echo "| Native build/link | $(grep -h '^RESULT:' "$LOG_DIR"/*.log 2>/dev/null | tr '\n' ' ')|"
             echo "| Model load on iOS | NOT proven by CI (needs a device + the 3.28 GB model) |"
             echo "| Audio generation / voice cloning | NOT proven by CI |"
-            echo "| Signing | IPAs are UNSIGNED: sign them yourself (e.g. a sideloader); LiveContainer may restrict unsigned IPAs; not tested here |"
+            echo "| Signing | The IPA is UNSIGNED: it must be signed with your own Apple ID or certificate before it installs on a device |"
             echo '```'
             tail -n 30 "$LOG_DIR/build_audiocpp_ios.log" 2>/dev/null || true
-            tail -n 15 "$LOG_DIR/build_audiocpp_test_ipa.log" 2>/dev/null || true
+            tail -n 15 "$LOG_DIR/build_app_ipa.log" 2>/dev/null || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload logs

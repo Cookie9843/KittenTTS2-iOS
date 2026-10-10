@@ -1,8 +1,8 @@
-# Third-party notices (KittenTTS app + audio.cpp test app)
+# Third-party notices (KittenTTS app)
 
-This file is bundled in the app. The unsigned IPAs built from `NativeAudioCpp/` and `scripts/build_app_ipa.sh` statically links native code and copies the upstream
+This file is bundled in the app. The unsigned IPA built by `scripts/build_app_ipa.sh` statically links native code and copies the upstream
 licence files that exist in the pinned source tree into `Licenses/` inside the `.app`. It contains **no model
-weights**; KittenTTS 2 is downloaded by the user from https://huggingface.co/dignome/kitten_tts2/tree/main (SHA-256 `e97920ca5053f9fcd4de638dcd8114ed2510d4291a93257473a8843c3ff349ad`), and KittenTTS 0.8 models from KittenML's Hugging Face repositories.
+weights**; KittenTTS 2 is downloaded by the user from https://huggingface.co/dignome/kitten_tts2/tree/main or imported from a file the user already has (SHA-256 of the published file: `e97920ca5053f9fcd4de638dcd8114ed2510d4291a93257473a8843c3ff349ad`), and KittenTTS 0.8 models from KittenML's Hugging Face repositories.
 
 | Component | Source | Licence |
 | --- | --- | --- |

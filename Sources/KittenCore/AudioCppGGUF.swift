@@ -234,7 +234,7 @@ public enum AudioCppGGUFInspector {
         return report
     }
 
-    public static func validate(_ report: AudioCppGGUFReport) -> AudioCppValidation {
+    public static func validate(_ report: AudioCppGGUFReport, publishedSize: Int64 = AudioCppPackage.publishedSize) -> AudioCppValidation {
         var checks: [AudioCppCheck] = []
         func add(_ name: String, _ status: AudioCppCheckStatus, _ detail: String) {
             checks.append(AudioCppCheck(name: name, status: status, detail: detail))
@@ -280,12 +280,12 @@ public enum AudioCppGGUFInspector {
                 + (missing.isEmpty ? "" : "; not found by expected name: \(missing.joined(separator: ", ")); the native loader is the final judge"))
         }
 
-        let isPublished = report.fileSize == AudioCppPackage.publishedSize
-        if report.fileSize < AudioCppPackage.publishedSize && report.architecture == AudioCppPackage.architecture {
-            add("File size", .fail, "\(report.fileSize) bytes is smaller than the published \(AudioCppPackage.publishedSize); the download is probably incomplete")
+        let isPublished = report.fileSize == publishedSize
+        if report.fileSize < publishedSize && report.architecture == AudioCppPackage.architecture {
+            add("File size", .fail, "\(report.fileSize) bytes is smaller than the published \(publishedSize); the download is probably incomplete")
         } else {
             add("File size", isPublished ? .pass : .warn,
-                "\(report.fileSize) bytes; published \(AudioCppPackage.publishedSize)" + (isPublished ? "" : " (different export; SHA-256 cannot match)"))
+                "\(report.fileSize) bytes; published \(publishedSize)" + (isPublished ? "" : " (different export; SHA-256 cannot match)"))
         }
 
         let guidance: String?
@@ -293,9 +293,9 @@ public enum AudioCppGGUFInspector {
         case .audiocppKittenTTS2:
             guidance = nil
         case .audiocppOtherFamily(let family):
-            guidance = "This is an audio.cpp GGUF for family \(family ?? "unknown"), not kitten_tts2. This test only supports \(AudioCppPackage.publishedFileName) from \(AudioCppPackage.sourceRepository)."
+            guidance = "This is an audio.cpp GGUF for family \(family ?? "unknown"), not kitten_tts2. This app supports the single-file \(AudioCppPackage.publishedFileName) package from \(AudioCppPackage.sourceRepository)."
         case .upstreamTQ2_1:
-            guidance = "This looks like KittenML's upstream TQ2_1 GGUF (qwen3 + TQ2_1). It cannot run on audio.cpp. Use the separate 'TQ2_1 load probe' app for it, or pick \(AudioCppPackage.publishedFileName) from \(AudioCppPackage.sourceRepository)."
+            guidance = "This looks like KittenML's upstream TQ2_1 GGUF (qwen3 + TQ2_1). It uses a different runtime and cannot run on audio.cpp, so this app does not support it. Choose the audio.cpp package \(AudioCppPackage.publishedFileName) from \(AudioCppPackage.sourceRepository) instead."
         case .otherGGUF(let arch):
             guidance = "This GGUF has architecture \(arch ?? "unknown") and is not an audio.cpp KittenTTS 2 package. Download \(AudioCppPackage.publishedFileName) (3.28 GB) from \(AudioCppPackage.sourceRepository) and select that single file."
         }

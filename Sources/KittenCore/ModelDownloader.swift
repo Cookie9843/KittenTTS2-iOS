@@ -23,7 +23,7 @@ public protocol DownloadTransport: Sendable {
 
 public enum DownloadError: Error, Equatable, LocalizedError {
     case invalidManifest(String)
-    case insufficientDisk(needed: Int64, available: Int64)
+    case insufficientDisk(needed: Int64, available: Int64, alreadyDownloaded: Int64)
     case http(Int)
     case network(String)
     case sizeMismatch(expected: Int64, actual: Int64)
@@ -35,8 +35,9 @@ public enum DownloadError: Error, Equatable, LocalizedError {
         let fmt = { (b: Int64) in ByteCountFormatter.string(fromByteCount: b, countStyle: .file) }
         switch self {
         case .invalidManifest(let m): return m
-        case .insufficientDisk(let need, let have):
-            return "Not enough free storage: about \(fmt(need)) is needed, but only \(fmt(have)) is available. Free up space and try again."
+        case .insufficientDisk(let need, let have, let done):
+            let kept = done > 0 ? " (\(fmt(done)) is already downloaded and not counted)" : ""
+            return "Not enough free storage: \(fmt(need)) still has to be written\(kept), but only \(fmt(have)) is available on this device’s storage. Free up at least \(fmt(max(0, need - have))) and try again."
         case .http(let code): return "The server answered with HTTP \(code). Please try again later."
         case .network(let m): return "Network problem: \(m). Your progress is kept; tap Resume to continue."
         case .sizeMismatch(let e, let a): return "The downloaded file has the wrong size (\(fmt(a)) instead of \(fmt(e))); it was discarded. Please download again."
@@ -62,8 +63,8 @@ public struct DownloadProgress: Equatable, Sendable {
 }
 
 public final class ModelDownloader: @unchecked Sendable {
-    /// Free space kept beyond the file itself (hashing, filesystem metadata).
-    public static let diskMargin: Int64 = 128 * 1024 * 1024
+    /// Free space kept beyond the bytes still to be written (hashing, filesystem metadata).
+    public static let diskMargin: Int64 = StorageAssessment.headroom
 
     private let transport: DownloadTransport
     private let availableDisk: @Sendable (URL) -> Int64?
@@ -103,9 +104,9 @@ public final class ModelDownloader: @unchecked Sendable {
         if have > file.size { discardPartial(for: file, in: stagingDirectory); have = 0 }
 
         progress(DownloadProgress(stage: .checkingSpace, bytes: have, total: file.size))
-        if let free = availableDisk(stagingDirectory) {
-            let needed = file.size - have + Self.diskMargin
-            if free < needed { throw DownloadError.insufficientDisk(needed: needed, available: free) }
+        let space = StorageAssessment.assess(.download(totalBytes: file.size, alreadyPresent: have), availableBytes: availableDisk(stagingDirectory))
+        if space.outcome == .insufficient, let free = space.availableBytes {
+            throw DownloadError.insufficientDisk(needed: space.requiredBytes, available: free, alreadyDownloaded: have)
         }
 
         if have < file.size {

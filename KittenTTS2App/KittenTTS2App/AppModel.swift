@@ -20,8 +20,8 @@ final class AppModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
     @Published var speed: Float = 1.0
     @Published var text: String = ""
     @Published var phase: Phase = .idle
-    @Published var message: String?
-    @Published var messageIsError = false
+    /// One independent message slot per operation (model setup, synthesis, playback, history).
+    @Published private(set) var status = OperationStatus<LegacyOperation>()
     @Published var history: [GenerationRecord] = []
     @Published var playingID: UUID?
     @Published var latest: GenerationRecord?
@@ -42,7 +42,7 @@ final class AppModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
             store = try HistoryStore(directory: support.appendingPathComponent("History", isDirectory: true))
             history = store?.records ?? []
         } catch {
-            show("History is unavailable: \(error.localizedDescription)", error: true)
+            post("History is unavailable: \(error.localizedDescription)", for: .history, error: true)
         }
     }
 
@@ -59,9 +59,9 @@ final class AppModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
 
     var canGenerate: Bool { isInstalled(legacyVariant) && !busy }
 
-    func show(_ text: String, error: Bool = false) {
-        message = text
-        messageIsError = error
+    func post(_ text: String?, for operation: LegacyOperation, error: Bool = false) {
+        guard let text else { status.clear(operation); return }
+        if error { status.error(text, for: operation) } else { status.info(text, for: operation) }
     }
 
     // MARK: Import
@@ -72,7 +72,7 @@ final class AppModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
         let variant = self.legacyVariant
         let root = modelRoot
         phase = .importing(0)
-        show("Validating…")
+        post("Validating…", for: .modelSetup)
         let flag = CancelFlag()
         cancelToken = flag
         Task.detached { [weak self] in
@@ -106,7 +106,7 @@ final class AppModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
 
     private func finishImport(error: String) {
         phase = .idle
-        show(error, error: true)
+        post(error, for: .modelSetup, error: true)
     }
 
     private func finishImport(success plan: ImportPlan) {
@@ -114,7 +114,7 @@ final class AppModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
         installRevision += 1
         if let variant = plan.legacyVariant { engines[variant] = nil }
         let notes = plan.notes.isEmpty ? "" : "\n\n" + plan.notes.joined(separator: "\n")
-        show("Imported \(plan.family.displayName) (\(ImportValidator.formatBytes(plan.totalBytes))).\(notes)")
+        post("Imported \(plan.family.displayName) (\(ImportValidator.formatBytes(plan.totalBytes))).\(notes)", for: .modelSetup)
     }
 
     // MARK: Download (legacy only, explicit user action)
@@ -123,7 +123,7 @@ final class AppModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
         guard !busy else { return }
         let variant = legacyVariant
         phase = .downloading(0)
-        show("Downloading \(variant.huggingFaceRepo) from Hugging Face…")
+        post("Downloading \(variant.huggingFaceRepo) from Hugging Face…", for: .modelSetup)
         Task {
             do {
                 _ = try await engine(for: variant) { value in
@@ -131,10 +131,10 @@ final class AppModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
                 }
                 phase = .idle
                 installRevision += 1
-                show("\(variant.displayName) is ready.")
+                post("\(variant.displayName) is ready.", for: .modelSetup)
             } catch {
                 phase = .idle
-                show("Download failed: \(error.localizedDescription)", error: true)
+                post("Download failed: \(error.localizedDescription)", for: .modelSetup, error: true)
             }
         }
     }
@@ -155,31 +155,32 @@ final class AppModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
 
     func generate() {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { show("Enter some text first.", error: true); return }
+        post(nil, for: .synthesis)
+        guard !trimmed.isEmpty else { post("Enter some text first.", for: .synthesis, error: true); return }
         guard isInstalled(legacyVariant) else {
-            show("Import or download a \(legacyVariant.displayName) model first (Models tab).", error: true)
+            post("Import or download a \(legacyVariant.displayName) model first (Models tab).", for: .synthesis, error: true)
             return
         }
         guard !busy else { return }
         let variant = legacyVariant, selectedVoice = voice, selectedSpeed = speed
         phase = .loading
-        show("Loading model (the first run also fetches small phonemizer data files if they are missing)…")
+        post("Loading model (the first run also fetches small phonemizer data files if they are missing)…", for: .synthesis)
         Task {
             do {
                 let tts = try await engine(for: variant)
                 phase = .generating
-                show("Generating… (cannot be cancelled once started)")
+                post("Generating… (cannot be cancelled once started)", for: .synthesis)
                 let result = try await tts.generate(trimmed, voice: selectedVoice, speed: selectedSpeed)
                 let record = try store?.add(samples: result.samples, sampleRate: result.sampleRate, text: trimmed, family: .legacy08,
                                             modelName: variant.displayName, voice: selectedVoice.displayName, speed: selectedSpeed)
                 history = store?.records ?? []
                 latest = record
                 phase = .idle
-                show("Done: \(String(format: "%.1f", result.duration)) s of audio.")
+                post("Done: \(String(format: "%.1f", result.duration)) s of audio.", for: .synthesis)
                 if let record { play(record) }
             } catch {
                 phase = .idle
-                show("Generation failed: \(error.localizedDescription)", error: true)
+                post("Generation failed: \(error.localizedDescription)", for: .synthesis, error: true)
             }
         }
     }
@@ -197,7 +198,7 @@ final class AppModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
             play(record)
             return record
         } catch {
-            show("Could not save the audio: \(error.localizedDescription)", error: true)
+            post("Could not save the audio: \(error.localizedDescription)", for: .history, error: true)
             return nil
         }
     }
@@ -205,6 +206,7 @@ final class AppModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
     func audioURL(_ record: GenerationRecord) -> URL? { store?.audioURL(for: record) }
 
     func play(_ record: GenerationRecord) {
+        post(nil, for: .playback)
         guard let url = audioURL(record) else { return }
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback)
@@ -215,7 +217,7 @@ final class AppModel: NSObject, ObservableObject, AVAudioPlayerDelegate {
             playingID = record.id
             newPlayer.play()
         } catch {
-            show("Playback failed: \(error.localizedDescription)", error: true)
+            post("Playback failed: \(error.localizedDescription)", for: .playback, error: true)
         }
     }
 

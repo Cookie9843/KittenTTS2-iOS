@@ -10,6 +10,7 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
     enum Phase: Equatable {
         case idle
         case downloading(DownloadProgress)
+        case importing(Double)
         case loading
         case generating
         case recording
@@ -20,8 +21,8 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
     static let crashNoteKey = "kt.previousRunNote"
 
     @Published var phase: Phase = .idle
-    @Published var message: String?
-    @Published var messageIsError = false
+    /// One independent message slot per operation (download, import, synthesis, reference audio, playback).
+    @Published private(set) var status = OperationStatus<Kitten2Operation>()
     @Published var installRevision = 0
     @Published var isLoaded = false
     @Published var voice = Kitten2Package.defaultVoice
@@ -78,23 +79,25 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
         }
     }
 
-    nonisolated static func freeDisk(_ url: URL) -> Int64? {
-        let values = try? url.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey, .volumeAvailableCapacityKey])
-        if let important = values?.volumeAvailableCapacityForImportantUsage { return important }
-        return values?.volumeAvailableCapacity.map { Int64($0) }
-    }
+    nonisolated static func freeDisk(_ url: URL) -> Int64? { StorageCapacity.usableBytes(at: url) }
 
     // MARK: State
 
     var runtimeLinked: Bool { Kitten2Engine.isLinked }
-    var isInstalled: Bool { _ = installRevision; return InstalledModels.isInstalled(modelFile, in: installDirectory) }
+    var activeModel: Kitten2InstalledModel? { _ = installRevision; return Kitten2Library.active(in: installDirectory) }
+    var isInstalled: Bool { activeModel != nil }
     var partialBytes: Int64 { _ = installRevision; return downloader.partialBytes(for: modelFile, in: stagingDirectory) }
     var busy: Bool { phase != .idle }
     var isDownloading: Bool { if case .downloading = phase { return true }; return false }
-    var modelURL: URL { InstalledModels.fileURL(modelFile, in: installDirectory) }
+    var modelURL: URL { activeModel?.url ?? InstalledModels.fileURL(modelFile, in: installDirectory) }
+    var isImporting: Bool { if case .importing = phase { return true }; return false }
     var canSpeakWithCloneVoice: Bool { reference != nil && !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
-    func show(_ text: String?, error: Bool = false) { message = text; messageIsError = error }
+    /// Posts or (with nil) clears the message of one operation; other operations' messages are untouched.
+    func post(_ text: String?, for operation: Kitten2Operation, error: Bool = false) {
+        guard let text else { status.clear(operation); return }
+        if error { status.error(text, for: operation) } else { status.info(text, for: operation) }
+    }
 
     private func crumb(_ stage: String?) {
         if let stage { UserDefaults.standard.set("\(stage) (\(ISO8601DateFormatter().string(from: Date())))", forKey: Self.breadcrumbKey) }
@@ -108,7 +111,13 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
 
     // MARK: Download
 
-    var freeDiskBytes: Int64? { Self.freeDisk(installDirectory.deletingLastPathComponent()) ?? Self.freeDisk(FileManager.default.temporaryDirectory) }
+    /// Capacity of the volume that receives the staged file and the installed model (same volume, Application Support).
+    var freeDiskBytes: Int64? { Self.freeDisk(stagingDirectory) }
+
+    /// Storage still needed to download (or resume) the model, for the confirmation sheet.
+    var downloadStorage: StorageAssessment {
+        StorageAssessment.assess(.download(totalBytes: modelFile.size, alreadyPresent: partialBytes), availableBytes: freeDiskBytes)
+    }
 
     /// Called after the user confirmed size / network / license in the dialog.
     func startDownload(allowCellular: Bool) {
@@ -118,7 +127,7 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
         let staging = stagingDirectory, install = installDirectory
         let loader = ModelDownloader(transport: URLSessionTransport(allowsCellular: allowCellular), availableDisk: Self.freeDisk)
         phase = .downloading(DownloadProgress(stage: .checkingSpace, bytes: loader.partialBytes(for: file, in: staging), total: file.size))
-        show(nil)
+        post(nil, for: .modelDownload)
         let report: @Sendable (DownloadProgress) -> Void = { [weak self] progress in
             Task { @MainActor in self?.applyProgress(progress) }
         }
@@ -127,16 +136,16 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
                 try await loader.download(file, stagingDirectory: staging, installDirectory: install, progress: report)
                 self?.phase = .idle
                 self?.installRevision += 1
-                self?.show("KittenTTS 2 is ready. It was verified against its published checksum.")
+                self?.post("KittenTTS 2 was downloaded and verified against its published checksum.", for: .modelDownload)
             } catch let error as DownloadError {
                 self?.phase = .idle
                 self?.installRevision += 1
-                if error == .cancelled { self?.show("Download paused. Tap Resume to continue where it stopped.") }
-                else { self?.show(error.localizedDescription, error: true) }
+                if error == .cancelled { self?.post("Download paused. Tap Resume to continue where it stopped.", for: .modelDownload) }
+                else { self?.post(error.localizedDescription, for: .modelDownload, error: true) }
             } catch {
                 self?.phase = .idle
                 self?.installRevision += 1
-                self?.show(error.localizedDescription, error: true)
+                self?.post(error.localizedDescription, for: .modelDownload, error: true)
             }
         }
     }
@@ -155,9 +164,64 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
             await self?.downloadTask?.value
             self?.downloader.discardPartial(for: file, in: staging)
             self?.installRevision += 1
-            self?.show("Download cancelled and the partial file was removed.")
+            self?.post("Download cancelled and the partial file was removed.", for: .modelDownload)
         }
     }
+
+    // MARK: Import from Files
+
+    private var importCancel: CancelFlag?
+
+    /// Installs a KittenTTS 2 package the user picked in Files. The file is validated and streamed into the staging folder
+    /// first, so an invalid, failed or cancelled import never touches the model that is already installed.
+    func importModel(from url: URL) {
+        guard !busy else { return }
+        post(nil, for: .modelImport)
+        phase = .importing(0)
+        let flag = CancelFlag()
+        importCancel = flag
+        let install = installDirectory, staging = stagingDirectory
+        let importer = Kitten2Importer(availableDisk: Self.freeDisk)
+        Task { [weak self] in
+            // Security-scoped access must span the whole validation and copy, and is released afterwards.
+            let result: Result<Kitten2ImportRecord, Error> = await Task.detached(priority: .userInitiated) { () -> Result<Kitten2ImportRecord, Error> in
+                let scoped = url.startAccessingSecurityScopedResource()
+                defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                do {
+                    var last = -1
+                    let record = try importer.install(source: url, installDirectory: install, stagingDirectory: staging, progress: { value in
+                        let percent = Int(value * 100)
+                        guard percent != last else { return }
+                        last = percent
+                        Task { @MainActor in
+                            if case .importing(let current)? = self?.phase, value > current { self?.phase = .importing(value) }
+                        }
+                    }, isCancelled: { flag.isCancelled })
+                    return .success(record)
+                } catch { return .failure(error) }
+            }.value
+            guard let self else { return }
+            switch result {
+            case .success(let record):
+                await engine.unload()
+                isLoaded = false
+                phase = .idle
+                installRevision += 1
+                let fmt = ByteCountFormatter.string(fromByteCount: record.size, countStyle: .file)
+                post("Imported “\(record.originalName)” (\(fmt)). " + (record.checksumVerified
+                     ? "It matches the published KittenTTS 2 checksum."
+                     : "It is a different export from the published package, so its checksum could not be compared; the model is checked again when it loads."),
+                     for: .modelImport)
+            case .failure(let error):
+                phase = .idle
+                post(error.localizedDescription, for: .modelImport, error: true)
+            }
+        }
+    }
+
+    func cancelImport() { importCancel?.cancel() }
+
+    func importFailed(_ message: String) { post(message, for: .modelImport, error: true) }
 
     func deleteModel() {
         guard !busy else { return }
@@ -166,8 +230,10 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
             await engine.unload()
             isLoaded = false
             InstalledModels.delete(modelFile, installDirectory: installDirectory, stagingDirectory: stagingDirectory)
+            Kitten2Library.deleteImported(in: installDirectory)
             installRevision += 1
-            show("KittenTTS 2 was removed from this device.")
+            post("KittenTTS 2 was removed from this device.", for: .modelDownload)
+            post(nil, for: .modelImport)
         }
     }
 
@@ -182,7 +248,7 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
         guard !busy else { return }
         await engine.unload()
         isLoaded = false
-        if let reason { show(reason) }
+        if let reason { post(reason, for: .synthesis) }
     }
 
     /// Verifies the file header, checks storage/memory, then memory-maps the model (once).
@@ -191,11 +257,11 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
         guard runtimeLinked else { throw NativeEngineError(message: "This build does not include the KittenTTS 2 speech engine.") }
         guard isInstalled else { throw NativeEngineError(message: "Download KittenTTS 2 first (Models tab).") }
         phase = .loading
-        show("Preparing KittenTTS 2… the first start can take around 10–30 seconds.")
+        post("Preparing KittenTTS 2… the first start can take around 10–30 seconds.", for: .synthesis)
         let url = modelURL
         let report = try await Task.detached(priority: .userInitiated) { try AudioCppGGUFInspector.inspect(url: url) }.value
         let validation = AudioCppGGUFInspector.validate(report)
-        guard validation.passed else { throw NativeEngineError(message: "The installed file is not a valid KittenTTS 2 package. Delete it and download again.") }
+        guard validation.passed else { throw NativeEngineError(message: "The installed file is not a valid KittenTTS 2 package. Remove it in the Models tab and download or import a compatible file.") }
         let available = Kitten2Engine.availableMemory
         let snapshot = ResourceSnapshot(physicalMemory: ProcessInfo.processInfo.physicalMemory,
                                         availableMemory: available > 0 ? available : nil,
@@ -209,7 +275,7 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
         let result = try await engine.load(path: url.path, threads: threads)
         lastLoadSeconds = result.seconds
         isLoaded = true
-        if !verdict.warnings.isEmpty { show("Heads up: " + verdict.warnings.joined(separator: " ")) }
+        if !verdict.warnings.isEmpty { post("Heads up: " + verdict.warnings.joined(separator: " "), for: .synthesis) }
     }
 
     // MARK: Synthesis
@@ -225,7 +291,7 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
         let selectedVoice = voice
         let reference = self.reference, transcript = self.transcript
         phase = .loading
-        show(nil)
+        post(nil, for: .synthesis)
         Task { [weak self] in
             guard let self else { return }
             do {
@@ -237,7 +303,7 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
                     try await ensureLoaded()
                     try preflight()
                     phase = .generating
-                    show("Cloning the voice and generating speech… this can't be interrupted, but you can keep using the app.")
+                    post("Cloning the voice and generating speech… this can't be interrupted, but you can keep using the app.", for: .synthesis)
                     crumb("native synthesis (clone)")
                     let audio = try await engine.clone(text: text, reference: checked.clip, transcript: checked.transcript)
                     try finish(audio, text: text, voice: "Cloned voice", started: started)
@@ -246,7 +312,7 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
                     try await ensureLoaded()
                     try preflight()
                     phase = .generating
-                    show("Generating speech… this can't be interrupted, but you can keep using the app.")
+                    post("Generating speech… this can't be interrupted, but you can keep using the app.", for: .synthesis)
                     crumb("native synthesis")
                     let audio = try await engine.synthesize(text: text, voice: selectedVoice)
                     try finish(audio, text: text, voice: selectedVoice, started: started)
@@ -254,7 +320,7 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
             } catch {
                 crumb(nil)
                 phase = .idle
-                show(error.localizedDescription, error: true)
+                post(error.localizedDescription, for: .synthesis, error: true)
             }
         }
     }
@@ -267,20 +333,21 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
         }
         let elapsed = Date().timeIntervalSince(started)
         lastSynthesisNote = String(format: "Last: %.1f s of audio, %d Hz, generated in %.1f s", audio.duration, audio.sampleRate, elapsed)
-        show(String(format: "Done: %.1f s of audio.", audio.duration))
+        post(String(format: "Done: %.1f s of audio.", audio.duration), for: .synthesis)
         app.addRecord(samples: audio.samples, sampleRate: audio.sampleRate, text: text, family: .kitten2, modelName: Kitten2Package.displayName, voice: voice, speed: 1.0)
     }
 
     // MARK: Voice cloning reference
 
     func importReference(_ url: URL) {
+        post(nil, for: .referenceAudio)
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         do {
             let clip = try ReferenceAudioIO.loadClip(from: url)
             try acceptReference(clip, name: url.lastPathComponent)
         } catch {
-            show(error.localizedDescription, error: true)
+            post(error.localizedDescription, for: .referenceAudio, error: true)
         }
     }
 
@@ -291,7 +358,7 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
         _ = try ReferenceAudioIO.writePreview(clip)
         reference = clip
         referenceName = name
-        show(String(format: "Reference ready (%.1f s). Now type exactly what is said in it.", clip.duration))
+        post(String(format: "Reference ready (%.1f s). Now type exactly what is said in it.", clip.duration), for: .referenceAudio)
     }
 
     func clearReference() {
@@ -303,8 +370,9 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
         guard !busy else { return }
         Task { [weak self] in
             guard let self else { return }
+            post(nil, for: .referenceAudio)
             guard await MicrophoneAccess.request() else {
-                show("Microphone access is off. Enable it in Settings > Privacy > Microphone, or choose an audio file instead.", error: true)
+                post("Microphone access is off. Enable it in Settings > Privacy > Microphone, or choose an audio file instead.", for: .referenceAudio, error: true)
                 return
             }
             stopPreview()
@@ -312,7 +380,6 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
                 try recorder.start()
                 phase = .recording
                 recordingSeconds = 0
-                show(nil)
                 recordingTimer = Task { [weak self] in
                     while !Task.isCancelled {
                         guard let self, self.recorder.isRecording else { break }
@@ -322,7 +389,7 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
                     if let self, !Task.isCancelled, self.phase == .recording { self.stopRecording() }
                 }
             } catch {
-                show("Could not record: \(error.localizedDescription)", error: true)
+                post("Could not record: \(error.localizedDescription)", for: .referenceAudio, error: true)
             }
         }
     }
@@ -332,18 +399,19 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
         recordingTimer?.cancel()
         let url = recorder.stop()
         phase = .idle
-        guard let url else { show("Nothing was recorded.", error: true); return }
+        guard let url else { post("Nothing was recorded.", for: .referenceAudio, error: true); return }
         do {
             let clip = try WAVDecoder.decode(url: url)
             try acceptReference(clip, name: "Recording")
         } catch {
-            show(error.localizedDescription, error: true)
+            post(error.localizedDescription, for: .referenceAudio, error: true)
         }
     }
 
     func togglePreview() {
         if previewing { stopPreview(); return }
         guard reference != nil else { return }
+        post(nil, for: .playback)
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback)
             try AVAudioSession.sharedInstance().setActive(true)
@@ -353,7 +421,7 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
             previewing = true
             player.play()
         } catch {
-            show("Preview failed: \(error.localizedDescription)", error: true)
+            post("Preview failed: \(error.localizedDescription)", for: .playback, error: true)
         }
     }
 
@@ -380,6 +448,14 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
 
     // MARK: Diagnostics
 
+    var sourceDescription: String {
+        switch activeModel?.source {
+        case .downloaded?: return "downloaded"
+        case .imported?: return "imported from Files"
+        case nil: return "none"
+        }
+    }
+
     func diagnosticsText() -> String {
         let fmt = { (b: UInt64) in ByteCountFormatter.string(fromByteCount: Int64(clamping: b), countStyle: .file) }
         var lines = [
@@ -388,7 +464,7 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
             "runtime: \(Kitten2Engine.runtimeInfo)",
             "device OS: \(ProcessInfo.processInfo.operatingSystemVersionString); physical memory: \(fmt(ProcessInfo.processInfo.physicalMemory))",
             "available to app: \(fmt(Kitten2Engine.availableMemory)); free storage: \(freeDiskBytes.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "unknown")",
-            "KittenTTS 2 installed: \(isInstalled); partial download: \(partialBytes) bytes; loaded: \(isLoaded)",
+            "KittenTTS 2 installed: \(isInstalled) (\(sourceDescription)); partial download: \(partialBytes) bytes; loaded: \(isLoaded)",
         ]
         if let s = lastLoadSeconds { lines.append(String(format: "last model load: %.1f s", s)) }
         if let n = lastSynthesisNote { lines.append(n) }
