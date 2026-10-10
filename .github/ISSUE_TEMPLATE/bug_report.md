@@ -24,11 +24,11 @@ A clear and concise description of what you expected to happen.
 **Screenshots**
 If applicable, add screenshots to help explain your problem.
 
-**Smartphone (please complete the following information):**
- - Device: [e.g. iPhone6]
- - OS: [e.g. iOS8.1]
- - Browser [e.g. stock browser, safari]
- - Version [e.g. 22]
+**Device Info (please complete the following information):**
+ - Device: [e.g. iPad Pro M4]
+ - OS: [e.g. iPadOS 26.1]
+ - Sideloading method [e.g. SideStore, Livecontainer]
+ - Version [e.g. 0.9]
 
 **Additional context**
 Add any other context about the problem here.
