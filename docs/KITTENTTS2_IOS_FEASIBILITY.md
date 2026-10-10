@@ -12,4 +12,4 @@ An earlier spike that cross-compiled the TQ2_1 llama.cpp fork and a probe app fo
 ## Evidence (kept separate)
 - CI proves the audio.cpp runtime and the full app compile and link for iOS arm64 (`RESULT:` lines in the workflow log, symbols checked in the linked executable).
 - On-device behaviour is observational: one iPad (iPad16,5) loaded the package and synthesized the preset voice "Bruno". This says nothing about other devices; memory limits and speed vary and iOS may terminate the app.
-- Voice cloning has not been verified on a device.
+- Voice cloning and the other app flows were tested on the maintainer's own device(s) (Cookie9843); this is not CI evidence and not a claim about other devices.
