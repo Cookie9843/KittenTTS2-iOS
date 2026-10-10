@@ -9,18 +9,33 @@ Make speech right on your **iPhone or iPad** with this offline text-to-speech ap
 
 ## Contents
 
-1. [Get and install the app](#1-get-and-install-the-app)
-2. [Before you begin](#2-before-you-begin)
-3. [Set up a model](#3-set-up-a-model)
-4. [Make and manage speech](#4-make-and-manage-speech)
-5. [Manage models](#5-manage-models)
-6. [Privacy and permissions](#6-privacy-and-permissions)
-7. [Troubleshooting](#7-troubleshooting)
-8. [Technical notes and testing](#8-technical-notes-and-testing)
-9. [License and provenance](#license-and-provenance)
-10. [Build and publish (maintainers)](#build-and-publish-maintainers)
+1. [QuickStart](#quickstart)
+2. [Detailed guide](#detailed-guide)
+   1. [Get and install the app](#1-get-and-install-the-app)
+   2. [Before you begin](#2-before-you-begin)
+   3. [Set up a model](#3-set-up-a-model)
+   4. [Make and manage speech](#4-make-and-manage-speech)
+   5. [Manage models](#5-manage-models)
+   6. [Privacy and permissions](#6-privacy-and-permissions)
+   7. [Troubleshooting](#7-troubleshooting)
+   8. [Technical notes and testing](#8-technical-notes-and-testing)
+   9. [License and provenance](#license-and-provenance)
+   10. [Build and publish (maintainers)](#build-and-publish-maintainers)
 
-## 1. Get and install the app
+## QuickStart
+
+New to TTS and don’t have model files yet? You don’t need to find or prepare a model yourself: install the app, then download one from its **Models** tab.
+
+1. Download the newest unsigned IPA from the [Releases page](https://github.com/Cookie9843/KittenTTS2-iOS/releases), sign it with a signing/sideloading tool you trust, and install it on your iPhone or iPad.
+2. Open **Models** and download **KittenTTS 2** for multilingual voices and voice cloning, or **KittenTTS 0.8** for a smaller, faster download.
+3. Open **Speak**, select the model and a preset voice, enter text, and tap **Speak**.
+4. To use your own voice as a reference, KittenTTS 2 can clone from a short, clear speech recording; see [Clone a voice with KittenTTS 2](#clone-a-voice-with-kittentts-2).
+
+KittenTTS makes speech, not singing. The app doesn’t train a model from a singing method or recording. The [detailed guide](#detailed-guide) covers installation, downloads, imports, voice cloning, and troubleshooting.
+
+## Detailed guide
+
+### 1. Get and install the app
 
 Head to the **[Releases page](https://github.com/Cookie9843/KittenTTS2-iOS/releases)** and download `KittenTTS-<version>-unsigned.ipa` from the newest release. A `.sha256` file is provided alongside it if you want to check the download. Releases are created from version tags such as `v1.0.0`.
 
@@ -30,14 +45,14 @@ For normal installs, use the **Release IPA** from the Releases page. It includes
 
 The bundle identifier is `com.cookie9843.KittenTTS2App`. Your signing tool may change it to one you own.
 
-## 2. Before you begin
+### 2. Before you begin
 
 - You’ll need an **iPhone or iPad running iOS 16.4 or later**, plus a way to sign and sideload an IPA. A free Apple ID or paid developer account can be used; free signing profiles expire and need to be renewed under Apple's signing rules.
 - For **KittenTTS 2**, plan for a **3.28 GB** download (3,282,123,776 bytes) and about **3.5 GB of free storage** while downloading. Importing a model you already have also needs roughly that much space because a second copy is made during verification. KittenTTS 0.8 models are around 25–80 MB.
 - KittenTTS 2 needs plenty of **available RAM** for generation. It has been observed working on one iPad with about 2.5 GB reported available to the app, but devices with less free memory may run out. You can check the app’s estimate in **Models → Advanced: memory and diagnostics**. Close other apps before generating; see [Troubleshooting](#7-troubleshooting) for more tips.
 - Use **Wi-Fi** for the first large download unless you have a data plan that can handle it. The app asks before using mobile data for KittenTTS 2.
 
-## 3. Set up a model
+### 3. Set up a model
 
 When you open the app, you’ll see four tabs: **Speak**, **Voices**, **Models**, and **History**. Start in **Models** and choose whichever setup works for you.
 
@@ -61,15 +76,15 @@ When you open the app, you’ll see four tabs: **Speak**, **Voices**, **Models**
 2. Or choose **Import files you already have…** and select the `.onnx` model and its `voices.npz` file together.
 3. The first time you generate speech, the app may also download small phonemizer data files if they aren’t already available.
 
-## 4. Make and manage speech
+### 4. Make and manage speech
 
-### Choose a voice and speak
+#### Choose a voice and speak
 
 On **Speak**, choose KittenTTS 2 or 0.8, then select a preset from the **Voice** menu. KittenTTS 2 has 48 presets, including multilingual presets named for a language. KittenTTS 0.8 has 8 voices and a speed slider.
 
 Type or paste your text and tap **Speak**. The first KittenTTS 2 run loads the model and may take 10–30 seconds. Generation can’t be interrupted once it starts. When it’s ready, the result plays automatically and is saved to **History**.
 
-### Clone a voice with KittenTTS 2
+#### Clone a voice with KittenTTS 2
 
 On the **Voices** tab, in the cloning section:
 
@@ -80,11 +95,11 @@ On the **Voices** tab, in the cloning section:
 
 If on-device recognition isn’t available for your language, the app will let you know so you can type the transcript. Your recording is never uploaded.
 
-### Play, export, or delete a recording
+#### Play, export, or delete a recording
 
 **History** lists the speech you’ve generated. Tap **Play** to listen, and use **Save or share WAV** or **Export WAV** to save or share it. Swipe an item to delete it, or choose **Clear all**. Your history stays on your device.
 
-## 5. Manage models
+### 5. Manage models
 
 You can manage downloads and installed models from **Models**:
 
@@ -98,7 +113,7 @@ You can manage downloads and installed models from **Models**:
 
 You can’t remove a model while it’s loading, generating, downloading, or being imported.
 
-## 6. Privacy and permissions
+### 6. Privacy and permissions
 
 Your text, recordings, and generated speech stay on your device.
 
@@ -107,7 +122,7 @@ Your text, recordings, and generated speech stay on your device.
 - **Files:** accessed through Apple’s file picker. The app keeps access to a selected file only while it reads it.
 - **Network:** used to download models and small data files from Hugging Face when you ask. There’s no analytics or account.
 
-## 7. Troubleshooting
+### 7. Troubleshooting
 
 | What you see | What to try |
 | --- | --- |
@@ -122,15 +137,18 @@ Your text, recordings, and generated speech stay on your device.
 | *This build does not include the KittenTTS 2 speech engine* | This build doesn’t include the speech engine. Install the Release IPA instead. |
 | App closed by iOS during generation | This is usually caused by memory pressure. After you reopen the app, check **Advanced diagnostics** for a note about the previous run. |
 
-## 8. Technical notes and testing
+### 8. Technical notes and testing
 
 This section is for anyone curious about what has been checked so far. Automated tests can cover app logic and builds, but they can’t guarantee inference will work on every device.
 
+- **How KittenTTS 2 was made to build for iOS:** the app uses a pinned community `audio.cpp` fork and its `ggml` CPU backend, not KittenML’s llama.cpp-based TQ2_1 runtime. `scripts/build_audiocpp_ios.sh` cross-compiles the KittenTTS 2 runtime as iOS arm64 static libraries with the iOS 16.4 deployment target, CPU-only settings, and only the `kitten_tts2` model implementation enabled. It also compiles audio.cpp’s C API, which the app connects through a small native C bridge; the IPA build links those pieces into the app and checks that the runtime symbols are present.
+- **iOS-specific work:** small, pinned patches bound large ggml metadata and graph allocations and turn an allocation failure into a recoverable error instead of an assertion. The build and bridge lifecycle are checked in CI, but compilation/linking does not prove that inference works on every device.
+- **About the custom llama.cpp route:** an earlier experiment tried KittenML’s TQ2_1 package with a llama.cpp fork and desktop LibTorch, but that route was removed; its decoder has no iOS build in this project. The supported KittenTTS 2 package is the audio.cpp-compatible community conversion described in [runtime notes](docs/KITTENTTS2_IOS_FEASIBILITY.md).
 - **Automated checks (CI and `swift test` on Linux):** download manifest, resume and SHA-256 verification, atomic install, import validation and recovery after failed or cancelled imports, storage rules, per-operation status messages, clone input rules, transcript review rules, legacy model delete/cancel cleanup, and the native bridge session lifecycle against a fake audio.cpp interface. CI also builds the full-app IPA and checks that the real runtime symbols are linked.
 - **Observed by the owner on their own device:** KittenTTS 2 model loading and preset synthesis on one iPad (iPad16,5, iOS 27.0): load time 10.55 seconds; 75,360 samples at 24 kHz generated in 7.42 seconds; 2.52 GB reported available. Voice cloning, GGUF import, storage checks, and KittenTTS 0.8 were also tried, but exact device and OS versions for those flows weren’t recorded.
 - **Not verified:** other devices, memory sizes, signing methods, or locales; every preset voice; repeated-generation stability across hardware; and the new KittenTTS 0.8 cancel/remove controls, transcript wording, and import changes on a real device. CI can’t prove on-device inference. macOS and Android aren’t supported.
 
-## License and provenance
+### License and provenance
 
 - **App code:** MIT; see [LICENSE](LICENSE).
 - **KittenTTS 2 weights:** a community conversion from KittenML / Stellon Labs’ KittenTTS 2, available at [`dignome/kitten_tts2`](https://huggingface.co/dignome/kitten_tts2). It is licensed under the **Stellon Labs Community License**; the license and NOTICE are embedded in the model file and published with it. Models are licensed separately from this code. By downloading or importing one, you agree to follow its license. This is not an official KittenML release or format.
@@ -139,7 +157,7 @@ This section is for anyone curious about what has been checked so far. Automated
 - Find all notices and credits in the app under **Models → Licenses and credits**, or read [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). For why KittenML’s TQ2_1 format isn’t supported, see [docs/KITTENTTS2_IOS_FEASIBILITY.md](docs/KITTENTTS2_IOS_FEASIBILITY.md).
 - Model weights are not included in this repository, CI, or the IPA. Workflows fail if a `.gguf` file ends up in the IPA.
 
-## Build and publish (maintainers)
+### Build and publish (maintainers)
 
 To build the app, you’ll need macOS with Xcode. `swift test` can run on macOS or Linux.
 
@@ -151,13 +169,13 @@ scripts/build_audiocpp_ios.sh                  # build the audio.cpp kitten_tts2
 WORK=… scripts/build_app_ipa.sh                # build the full unsigned IPA; fails if native symbols are missing
 ```
 
-### Workflows
+#### Workflows
 
 - `workflow_guard.yml` checks that release and CI workflows build the real audio.cpp runtime and that there is no UI-only build.
 - `ios_audiocpp_kitten2.yml` runs `swift test` and the bridge lifecycle test, builds the runtime and full app IPA, verifies linked symbols, and uploads the temporary `KittenTTS-unsigned-ipa` artifact.
 - `release.yml` runs on tags matching `v*`.
 
-### Publishing a release
+#### Publishing a release
 
 1. Make sure `main` is green.
 2. Create and push an annotated version tag on a commit in `main`, for example: `git tag -a v1.0.0 -m "v1.0.0" && git push origin v1.0.0`. Tags with a hyphen (such as `v1.0.0-rc1`) are published as pre-releases.
