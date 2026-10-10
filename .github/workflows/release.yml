@@ -2,8 +2,7 @@ name: Release (unsigned full-app IPA on v* tags)
 
 # Runs only when a version tag such as v1.0.0 is pushed (or manually, as a build-only dry run that publishes nothing).
 # It builds the REAL audio.cpp kitten_tts2 runtime, links it into the full app, refuses to continue unless the native symbols
-# are in the binary, and attaches that unsigned IPA to the GitHub Release for the tag. The UI-only compile check
-# (build_unsigned_ipa.yml) is never published. The IPA is UNSIGNED: each user signs it with their own Apple ID or certificate.
+# are in the binary, and attaches that unsigned IPA to the GitHub Release for the tag. No UI-only build is ever published. The IPA is UNSIGNED: each user signs it with their own Apple ID or certificate.
 # Maintainers: see "Publishing a release" in README.md. Nothing here creates or pushes a tag.
 on:
   push:

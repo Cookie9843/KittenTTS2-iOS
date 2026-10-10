@@ -26,12 +26,7 @@ Offline text-to-speech for **iPhone and iPad** (iOS 16.4 or later). After a mode
 
 **The IPA is unsigned.** iOS will not install it as it is. You must sign it yourself with your own Apple ID or developer certificate, using any signing/sideloading tool you trust, and install it on your own device. Signing is your responsibility; the project does not sign, host or distribute signed builds. Nothing in the app depends on one specific tool.
 
-Two kinds of builds exist; only one is for you:
-
-| Build | Where | What it is |
-| --- | --- | --- |
-| **Release IPA** (`KittenTTS-<version>-unsigned.ipa`) | Releases page | The **full app** with the real speech engine linked in. This is the one to install after you sign it. |
-| CI compile check | GitHub Actions "Build UI-only app" | A UI-only compile used to check pull requests. It has **no speech engine**, is never published as a download and cannot generate KittenTTS 2 speech. |
+The only build meant for you is the **Release IPA** (`KittenTTS-<version>-unsigned.ipa`) on the Releases page: the full app with the real speech engine linked in. Install it after you sign it.
 
 Workflow runs of "iOS audio.cpp runtime + full app IPA" also attach an unsigned full-app IPA as a temporary build artifact (artifact `KittenTTS-unsigned-ipa`) for development; use the Releases page for normal installs.
 
@@ -122,7 +117,7 @@ Removal is disabled while that model is loading, generating, downloading or bein
 | *The downloaded file failed its integrity check* | The partial file was discarded; download again. |
 | *Automatic transcription unavailable* | On-device recognition is not offered for that language/device, or permission is off (Settings → Privacy & Security → Speech Recognition). Type the transcript yourself. |
 | *Microphone access is off* | Enable it in Settings → Privacy & Security → Microphone, or choose an audio file instead. |
-| *This build does not include the KittenTTS 2 speech engine* | You installed the UI-only compile check. Install the release IPA instead. |
+| *This build does not include the KittenTTS 2 speech engine* | You installed a build without the speech engine. Install the release IPA instead. |
 | App closed by iOS during generation | Usually memory. The next launch shows a note about the previous run under Advanced diagnostics. |
 
 ## 8. What has and has not been verified
@@ -154,8 +149,8 @@ WORK=… scripts/build_app_ipa.sh             # full unsigned IPA linked against
 
 Workflows:
 
-- `build_unsigned_ipa.yml`: `swift test` and a **UI-only** compile (device and simulator). Uploads **no** IPA.
-- `ios_audiocpp_kitten2.yml`: builds the runtime and the **full** app IPA, verifies the linked symbols, uploads the temporary artifact `KittenTTS-unsigned-ipa`.
+- `workflow_guard.yml`: checks that release/CI workflows still build the real audio.cpp runtime and that no UI-only build exists.
+- `ios_audiocpp_kitten2.yml`: runs `swift test` and the bridge lifecycle test, builds the runtime and the **full** app IPA, verifies the linked symbols, uploads the temporary artifact `KittenTTS-unsigned-ipa`.
 - `release.yml`: runs on tags matching `v*`.
 
 ### Publishing a release
