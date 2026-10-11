@@ -698,6 +698,16 @@ struct DiagnosticsView: View {
     var body: some View {
         let report = k2.diagnosticsText()
         List {
+            Section("Increased Memory Limit") {
+                Button("Check entitlement") { k2.checkIncreasedMemoryLimit() }
+                Text(k2.increasedMemoryLimitStatus.message)
+                    .font(.footnote).foregroundStyle(.secondary)
+                if k2.increasedMemoryLimitStatus == .notEnabled {
+                    Link("GetMoreRam on GitHub", destination: URL(string: "https://github.com/hugeBlack/GetMoreRam")!)
+                }
+                Text("This checks the entitlement in this app’s signed executable. It does not measure the actual memory limit or guarantee extra headroom.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
             Section {
                 Text(report).font(.footnote.monospaced()).textSelection(.enabled)
                 ShareLink("Share diagnostics", item: report)

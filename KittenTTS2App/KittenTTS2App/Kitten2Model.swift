@@ -46,6 +46,7 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
     @Published var lastLoadSeconds: Double?
     @Published var lastSynthesisNote: String?
     @Published var previousRunNote: String?
+    @Published private(set) var increasedMemoryLimitStatus: IncreasedMemoryLimitStatus = .notChecked
 
     private unowned let app: AppModel
     private let engine = Kitten2Engine.shared
@@ -112,6 +113,10 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
     func clearPreviousRunNote() {
         previousRunNote = nil
         UserDefaults.standard.removeObject(forKey: Self.crashNoteKey)
+    }
+
+    func checkIncreasedMemoryLimit() {
+        increasedMemoryLimitStatus = IncreasedMemoryLimitCheck.check(executableURL: Bundle.main.executableURL)
     }
 
     // MARK: Download
@@ -551,6 +556,7 @@ final class Kitten2Model: NSObject, ObservableObject, AVAudioPlayerDelegate {
             "runtime: \(Kitten2Engine.runtimeInfo)",
             "device OS: \(ProcessInfo.processInfo.operatingSystemVersionString); physical memory: \(fmt(ProcessInfo.processInfo.physicalMemory))",
             "available to app: \(fmt(Kitten2Engine.availableMemory)); free storage: \(freeDiskBytes.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "unknown")",
+            "increased memory limit entitlement: \(increasedMemoryLimitStatus.message)",
             "KittenTTS 2 installed: \(isInstalled) (\(sourceDescription)); partial download: \(partialBytes) bytes; loaded: \(isLoaded)",
         ]
         if let s = lastLoadSeconds { lines.append(String(format: "last model load: %.1f s", s)) }
