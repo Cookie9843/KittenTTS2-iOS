@@ -33,12 +33,12 @@ public enum IncreasedMemoryLimitCheck {
               let handle = try? FileHandle(forReadingFrom: executableURL) else { return .unableToCheck }
         defer { try? handle.close() }
 
-        guard let header = try? handle.read(upToCount: 32), let header, header.count == 32,
+        guard let header = try? handle.read(upToCount: 32), header.count == 32,
               littleEndianUInt32(header, at: 0) == 0xfeedfacf else { return .unableToCheck }
         let commandCount = littleEndianUInt32(header, at: 16)
         let commandsSize = littleEndianUInt32(header, at: 20)
-        guard commandCount > 0, commandCount <= 10_000, commandsSize <= 4 * 1024 * 1024,
-              let commands = try? handle.read(upToCount: Int(commandsSize)), let commands,
+        guard commandCount > 0, commandCount <= 10_000, commandsSize >= 8, commandsSize <= 4 * 1024 * 1024,
+              let commands = try? handle.read(upToCount: Int(commandsSize)),
               commands.count == Int(commandsSize) else { return .unableToCheck }
 
         var offset = 0
@@ -54,7 +54,7 @@ public enum IncreasedMemoryLimitCheck {
                 guard signatureSize > 0, signatureSize <= 64 * 1024 * 1024,
                       signatureOffset <= UInt64(Int64.max),
                       (try? handle.seek(toOffset: signatureOffset)) != nil,
-                      let signature = try? handle.read(upToCount: signatureSize), let signature,
+                      let signature = try? handle.read(upToCount: signatureSize),
                       signature.count == signatureSize else { return .unableToCheck }
                 return status(in: signature)
             }

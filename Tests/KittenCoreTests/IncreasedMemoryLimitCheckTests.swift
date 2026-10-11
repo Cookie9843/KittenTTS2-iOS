@@ -8,6 +8,10 @@ final class IncreasedMemoryLimitCheckTests: XCTestCase {
         [UInt8(value >> 24), UInt8((value >> 16) & 0xff), UInt8((value >> 8) & 0xff), UInt8(value & 0xff)]
     }
 
+    private func le(_ value: UInt32) -> [UInt8] {
+        [UInt8(value & 0xff), UInt8((value >> 8) & 0xff), UInt8((value >> 16) & 0xff), UInt8(value >> 24)]
+    }
+
     private func signature(entitlementValue: Any) throws -> Data {
         let plist = try PropertyListSerialization.data(fromPropertyList: [entitlementKey: entitlementValue],
                                                        format: .xml, options: 0)
@@ -17,11 +21,23 @@ final class IncreasedMemoryLimitCheckTests: XCTestCase {
     }
 
     func testDetectsEnabledEntitlement() throws {
-        XCTAssertEqual(IncreasedMemoryLimitCheck.status(in: signature(entitlementValue: true)), .enabled)
+        XCTAssertEqual(IncreasedMemoryLimitCheck.status(in: try signature(entitlementValue: true)), .enabled)
     }
 
     func testDetectsMissingEntitlement() throws {
-        XCTAssertEqual(IncreasedMemoryLimitCheck.status(in: signature(entitlementValue: false)), .notEnabled)
+        XCTAssertEqual(IncreasedMemoryLimitCheck.status(in: try signature(entitlementValue: false)), .notEnabled)
+    }
+
+    func testChecksExecutableCodeSignatureWithoutReadingTheWholeFile() throws {
+        let codeSignature = try signature(entitlementValue: true)
+        let header = le(0xfeedfacf) + le(0) + le(0) + le(0) + le(1) + le(16) + le(0) + le(0)
+        let loadCommand = le(0x1d) + le(16) + le(48) + le(UInt32(codeSignature.count))
+        let executable = Data(header + loadCommand + Array(codeSignature))
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: url) }
+        try executable.write(to: url)
+
+        XCTAssertEqual(IncreasedMemoryLimitCheck.check(executableURL: url), .enabled)
     }
 
     func testDoesNotTreatDEROnlySignatureAsEntitlementAbsent() {
