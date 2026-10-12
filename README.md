@@ -24,7 +24,7 @@ Make speech right on your **iPhone or iPad** with this offline text-to-speech ap
 
 ## QuickStart
 
-New to TTS and don’t have model files yet? You don’t need to find or prepare a model yourself: install the app, then download one from its **Models** tab.
+New to KittenTTS and don’t have model files yet? You don’t need to find or prepare a model yourself: install the app, then download one from its **Models** tab.
 
 1. Download the newest unsigned IPA from the [Releases page](https://github.com/Cookie9843/KittenTTS2-iOS/releases), sign it with a signing/sideloading tool you trust, and install it on your iPhone or iPad.
 2. Open **Models** and download **KittenTTS 2** for multilingual voices and voice cloning, or **KittenTTS 0.8** for a smaller, faster download.
